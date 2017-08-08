@@ -692,12 +692,12 @@ void ChunkManager::TakeRequests(std::list<ChunkRequest> &dump)
 // These are in seconds:
 #define CHUNK_DELETE_INTERVAL 10.0f
 #define MAX_CHUNK_IDLE_TIME 15.0f
-void ChunkManager::StartChunkInitThread(void)
+void ChunkManager::StartChunkInitThread(ChunkHasPriorityOverFunc priorityFunc)
 {
     bInitChunks = true;
 
     mChunkInitThread = MakeSDLThread(
-        [this]()
+        [this, priorityFunc]()
         {
             std::list<ChunkRequest> requests;
             Uint32 ticks0 = SDL_GetTicks(),
@@ -708,6 +708,13 @@ void ChunkManager::StartChunkInitThread(void)
             {
                 requests.clear();
                 TakeRequests(requests);
+
+                requests.sort(
+                    [priorityFunc](const ChunkRequest &req1, const ChunkRequest &req2)
+                    {
+                        return priorityFunc(req1.id, req2.id);
+                    }
+                );
 
                 for (const ChunkRequest &req : requests)
                 {

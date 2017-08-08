@@ -18,6 +18,7 @@
 #define CHUNK_H
 
 #include <map>
+#include <functional>
 #include <unordered_set>
 #include <unordered_map>
 #include <list>
@@ -69,6 +70,8 @@ public:
     ~ChunkGenerator(void);
 };
 
+typedef std::function <bool (const ChunkID &, const ChunkID &)> ChunkHasPriorityOverFunc;
+
 class ChunkManager
 {
 private:
@@ -107,7 +110,7 @@ public:
     void GenerateChunk(const ChunkID &);
     void LoadChunk(const ChunkID &);
 
-    void StartChunkInitThread(void);
+    void StartChunkInitThread(ChunkHasPriorityOverFunc);
     void StopChunkInitThread(void);
 
     void RequestChunk(const ChunkID &);

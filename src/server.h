@@ -96,6 +96,8 @@ private:
 
     std::map<ClientID, PlayerData> mPlayerData;
 private:
+    float GetChunkPriority(const ChunkID &);
+
     void HandleClientData(const ClientID &, const DataPackage &);
     void OnPlayerPositionUpdate(const ClientID &clientID, const PositionUpdate *);
     void OnPlayerChunkRequest(const ClientID &clientID, const ChunkRequest *);

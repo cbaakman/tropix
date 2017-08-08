@@ -35,7 +35,13 @@ Server::Server(void):
 {
     mChunkGenerator = new ChunkGenerator(time(NULL));
     mChunkManager = new ChunkManager(mChunkGenerator);
-    mChunkManager->StartChunkInitThread();
+
+    mChunkManager->StartChunkInitThread(
+        [this](const ChunkID &id1, const ChunkID &id2)
+        {
+            return GetChunkPriority(id1) < GetChunkPriority(id2);
+        }
+    );
 }
 Server::~Server(void)
 {
@@ -74,6 +80,23 @@ bool Server::Run()
     }
 
     return true;
+}
+float Server::GetChunkPriority(const ChunkID &chunkID)
+{
+    vec2 chunkCenter = Chunk2World(chunkID, {GLfloat(PER_CHUNK_SIZE) / 2,
+                                             GLfloat(PER_CHUNK_SIZE) / 2});
+
+    float minDist2 = -1.0f;
+
+    for (auto &pair : mPlayerData)
+    {
+        vec2 playerPos = {pair.second.pos.x, pair.second.pos.z};
+        if (minDist2 < 0.0f || Distance2(playerPos, chunkCenter) < minDist2)
+            minDist2 = Distance2(playerPos, chunkCenter);
+    }
+
+    // Closest chunks go first.
+    return 1.0f / minDist2;
 }
 void Server::Update(const float dt)
 {
