@@ -1,9 +1,26 @@
+# Generated png files
+*.png
+
+# Swap files
+*.swp
+*~
+
+# binaries
+obj/*
+*.exe
+bin/server
+bin/client
+
+# Code blocks files
+*.depend
+*.layout
+
 # Windows image file caches
 Thumbs.db
 ehthumbs.db
 
-# Folder config file
-Desktop.ini
+# Config files
+*.ini
 
 # Recycle Bin used on file shares
 $RECYCLE.BIN/
