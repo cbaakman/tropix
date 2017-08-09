@@ -39,7 +39,8 @@ Server::Server(void):
     mChunkManager->StartChunkInitThread(
         [this](const ChunkID &id1, const ChunkID &id2)
         {
-            return GetChunkPriority(id1) < GetChunkPriority(id2);
+            // Higher priority chunks go first:
+            return GetChunkPriority(id1) > GetChunkPriority(id2);
         }
     );
 }
