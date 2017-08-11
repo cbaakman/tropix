@@ -36,7 +36,7 @@ KeyBindingValue MakeKeyBoardValue(SDL_Keycode code)
 
 void GetDefaultClientSettings(ClientSettings &settings)
 {
-    settings.render.renderDistance = 250;
+    settings.render.renderDistance = 200;
     settings.display.fullscreen = false;
     settings.display.resolution.width = 800;
     settings.display.resolution.height = 600;
