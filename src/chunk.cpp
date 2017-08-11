@@ -436,10 +436,15 @@ void ChunkGenerator::Generate(const ChunkID id, Chunk &chunk) const
 
                 for (j = 0; j < N_CUBE_EDGES; j++)
                 {
+                    UnitCubeEdge edgeJ = unitCubeEdges[j];
+
                     for (k = 0; k < N_CUBE_EDGES; k++)
                     {
+                        UnitCubeEdge edgeK = unitCubeEdges[k];
+
                         if (k != j &&
-                            hasInterpolation[j] && hasInterpolation[k])
+                            hasInterpolation[j] && hasInterpolation[k] &&
+                            EdgesShareFace(edgeJ, edgeK))
                         {
                             chunk.terrainEdges.push_back({terrainVertexIndicesPerEdge[j],
                                                           terrainVertexIndicesPerEdge[k]});

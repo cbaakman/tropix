@@ -84,6 +84,7 @@ const UnitCubeEdge unitCubeEdges[N_CUBE_EDGES] = {{UNITCUBE_VERTEX_I000, UNITCUB
                                                   {UNITCUBE_VERTEX_I101, UNITCUBE_VERTEX_I111},
                                                   {UNITCUBE_VERTEX_I011, UNITCUBE_VERTEX_I111}};
 
+
 #define N_CUBE_AXES 3
 #define N_CUBE_EDGES_PER_AXIS 4
 /**
@@ -103,10 +104,50 @@ const UnitCubeEdge axisEdges[N_CUBE_AXES][N_CUBE_EDGES_PER_AXIS] = {{{UNITCUBE_V
                                                                      {UNITCUBE_VERTEX_I110, UNITCUBE_VERTEX_I111},
                                                                      {UNITCUBE_VERTEX_I100, UNITCUBE_VERTEX_I101}}};
 
+typedef uint8_t UnitCubeAxis;
+#define UNITCUBE_AXIS_X 0x01
+#define UNITCUBE_AXIS_Y 0x02
+#define UNITCUBE_AXIS_Z 0x04
+
+#define N_CUBE_FACES 6
+
+struct UnitCubeFace
+{
+    UnitCubeAxis axis;
+    uint8_t value;  // 0 or 1 on axis
+};
+
+const UnitCubeFace unitCubeFaces[N_CUBE_FACES] = {{UNITCUBE_AXIS_X, 0}, {UNITCUBE_AXIS_X, 1},
+                                                  {UNITCUBE_AXIS_Y, 0}, {UNITCUBE_AXIS_Y, 1},
+                                                  {UNITCUBE_AXIS_Z, 0}, {UNITCUBE_AXIS_Z, 1}};
+
+
 bool EdgesConnected(const UnitCubeEdge &e1, const UnitCubeEdge &e2)
 {
     return e1.v[0] == e2.v[0] || e1.v[0] == e2.v[1] ||
            e1.v[1] == e2.v[0] || e1.v[1] == e2.v[1];
+}
+
+bool VertexInFace(const UnitCubeVertexIndex &vertex, const UnitCubeFace &face)
+{
+    if (face.value != 0)
+        return vertex & face.axis;
+    else
+        return !(vertex & face.axis);
+}
+
+bool EdgeInFace(const UnitCubeEdge &edge, const UnitCubeFace &face)
+{
+    return VertexInFace(edge.v[0], face) && VertexInFace(edge.v[1], face);
+}
+
+bool EdgesShareFace(const UnitCubeEdge &e1, const UnitCubeEdge &e2)
+{
+    for (int i = 0; i < N_CUBE_FACES; i++)
+        if (EdgeInFace(e1, unitCubeFaces[i]) && EdgeInFace(e2, unitCubeFaces[i]))
+            return true;
+
+    return false;
 }
 
 int LookupEdge(const UnitCubeEdge &e)
