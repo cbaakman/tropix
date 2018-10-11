@@ -24,12 +24,6 @@ void InGameScene::Render(void)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     CHECK_GL();
 
-    glDisable(GL_CULL_FACE);
-    CHECK_GL();
-
-    glDisable(GL_DEPTH_TEST);
-    CHECK_GL();
-
     RenderQuad quad;
     quad.texture = *pHorizonTexture;
     quad.vertices[0].position = vec3(-1.0f, -1.0f, 0.0f);
