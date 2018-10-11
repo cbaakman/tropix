@@ -1,232 +1,185 @@
-/* Copyright (C) 2017 Coos Baakman
-  This software is provided 'as-is', without any express or implied
-  warranty.  In no event will the authors be held liable for any damages
-  arising from the use of this software.
-  Permission is granted to anyone to use this software for any purpose,
-  including commercial applications, and to alter it and redistribute it
-  freely, subject to the following restrictions:
-  1. The origin of this software must not be misrepresented; you must not
-     claim that you wrote the original software. If you use this software
-     in a product, an acknowledgment in the product documentation would be
-     appreciated but is not required.
-  2. Altered source versions must be plainly marked as such, and must not be
-     misrepresented as being the original software.
-  3. This notice may not be removed or altered from any source distribution.
-*/
+#include <cstdarg>
+#include <cstdio>
 
-#include "texture.h"
-#include "exception.h"
+#include <boost/format.hpp>
 
+#include "texture.hpp"
+#include "error.hpp"
+#include "app.hpp"
 
-void PNGReadCallback (png_structp png_ptr, png_bytep data, png_size_t length)
+PNGError::PNGError(const char *format, ...)
 {
-    /*
-        Image data comes from an SDL_RWops input stream.
-        This callback function gets the requested bytes from it.
-     */
-
-    png_voidp pio = png_get_io_ptr(png_ptr);
-    SDL_RWops *io = (SDL_RWops *)pio;
-
-    size_t n;
-    if ((n = io->read(io, data, 1, length)) < length)
-    {
-        throw FormatableException("%d bytes requested, only %d read", length, n);
-    }
+    va_list pArgs;
+    va_start(pArgs, format);
+    vsnprintf(buffer, ERRORBUFFER_SIZE, format, pArgs);
+    va_end(pArgs);
 }
-void PNGErrorCallback(png_structp png_ptr, png_const_charp msg)
-{
-    /*
-       PNG errors must be thrown as an exception,
-       not just stderr.
-     */
 
-    throw FormatableException("Error from png: %s", (const char *)msg);
-}
-void PNGWarningCallback(png_structp png_ptr, png_const_charp msg)
+void PNGErrorCallback(png_structp pPNG, png_const_charp message)
 {
-    // Not decided what to do with warnings yet.
+    throw PNGError(message);
 }
-void LoadPNG(SDL_RWops *io, Texture *pTex)
-{
-    /*
-        We use libpng to read in a png file.
-        For further information:
-        http://www.libpng.org/pub/png/libpng-1.2.5-manual.html
-     */
 
-    png_info* info_ptr = 0, *end_info = 0;
-    png_struct* png_ptr = 0;
-    png_bytep *row_pointers = 0;
-    png_bytep png_data = 0;
-    png_uint_32 rowbytes;
-    int number_of_passes;
-    png_byte num_channels;
+void PNGReadCallback(png_structp pPNG, png_bytep outData, png_size_t length)
+{
+    std::istream *pIs = (std::istream *)png_get_io_ptr(pPNG);
+
+    pIs->read((char *)outData, length);
+    std::streamsize n = pIs->gcount();
+
+    if (n < length)
+        throw PNGError("only %u bytes read, %u requested", n, length);
+}
+PNGReader::PNGReader(void)
+{
+    pPNG = png_create_read_struct(PNG_LIBPNG_VER_STRING, (png_voidp)NULL,
+                                  (png_error_ptr)PNGErrorCallback,
+                                  (png_error_ptr)NULL);
+    if (pPNG == NULL)
+        throw PNGError("error creating png struct");
+
+    pInfo = png_create_info_struct(pPNG);
+    if (pInfo == NULL)
+        throw PNGError("error creating info struct");
+
+    pEnd = png_create_info_struct(pPNG);
+    if (pEnd == NULL)
+        throw PNGError("error creating end info struct");
+}
+PNGReader::~PNGReader(void)
+{
+    png_destroy_read_struct(&pPNG, &pInfo, &pEnd);
+}
+PNGImage *PNGReader::ReadImage(std::istream &is)
+{
+    // Tell libpng that it must take its data from a callback function.
+    png_set_read_fn(pPNG, &is, PNGReadCallback);
+
+    // Read info from the header.
+    png_read_info(pPNG, pInfo);
+
+    // Get info about the data in the image.
+    PNGImage *pImage = new PNGImage;
+    int bitDepth;
+    png_get_IHDR(pPNG, pInfo,
+                 &(pImage->width), &(pImage->height),
+                 &bitDepth, &(pImage->colorType),
+                 NULL, NULL, NULL);
+    if (bitDepth != 8)
+        throw FormatError("PNG image bit depth is %d", bitDepth);
+    else if (pImage->colorType != PNG_COLOR_TYPE_RGB
+             && pImage->colorType != PNG_COLOR_TYPE_RGB_ALPHA)
+        throw FormatError("PNG image color type is 0x%x", pImage->colorType);
+
+    // Get bytes per row.
+    png_uint_32 bytesPerRow = png_get_rowbytes(pPNG, pInfo);
+
+    // Allocate memory to store pixel data in.
+    pImage->data = (png_bytep)png_malloc(pPNG, pImage->height * bytesPerRow);
+    if (pImage->data == NULL)
+        throw PNGError("cannot allocate image data");
+
+    // Make row pointers for reading.
+    png_bytepp pRows = new png_bytep[pImage->height];
+
+    // Place the row pointers correctly.
+    for(png_uint_32 i = 0; i < pImage->height; i++)
+        pRows[i] = (png_bytep)(pImage->data) + (pImage->height - i - 1) * bytesPerRow;
 
     try
     {
-        // make a read structure:
-        png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, (png_voidp)NULL, NULL, NULL);
-        if (!png_ptr)
-        {
-            throw FormatableException(
-                       "png: error creating read struct");
-        }
+        // Read the entire image at once.
+        png_read_image(pPNG, pRows);
 
-        // info and end_info structures are also neccesary:
-        info_ptr = png_create_info_struct(png_ptr);
-        if (!info_ptr)
-        {
-            throw FormatableException(
-                       "png: error creating info struct");
-        }
-        end_info = png_create_info_struct(png_ptr);
-        if (!end_info)
-        {
-            throw FormatableException(
-                       "png: error creating end info");
-        }
-
-        // Catch libPNG's errors and warnings:
-        png_set_error_fn(png_ptr, png_get_error_ptr(png_ptr), PNGErrorCallback, PNGWarningCallback);
-
-        // Tell libpng that it must take its data from a callback function:
-        png_set_read_fn(png_ptr, (png_voidp *)io, PNGReadCallback);
-
-        // read info from the header:
-        png_read_info(png_ptr, info_ptr);
-
-        // Get info about the data in the image:
-        png_uint_32 png_width, png_height;
-        int bit_depth,
-            color_type,
-            interlace_type;
-
-        png_get_IHDR(png_ptr, info_ptr, &png_width, &png_height, &bit_depth, &color_type, &interlace_type, NULL, NULL);
-
-        // how many channels does the image have?
-        num_channels = png_get_channels(png_ptr, info_ptr);
-
-        // We want RGB colors, no palette:
-        if (color_type == PNG_COLOR_TYPE_PALETTE)
-        {
-            png_set_palette_to_rgb(png_ptr);
-            color_type = PNG_COLOR_TYPE_RGB;
-        }
-
-        // make sure the pixel depth is 8:
-        if (bit_depth < 8)
-        {
-            png_set_packing(png_ptr);
-            bit_depth = 8;
-        }
-        else if (bit_depth == 16)
-        {
-            png_set_strip_16(png_ptr);
-            bit_depth = 8;
-        }
-
-        // Make sure the transparency is set to an alpha channel, not tRNS:
-        if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS))
-            png_set_tRNS_to_alpha(png_ptr);
-
-        // Handle expansion of interlaced image:
-        number_of_passes = png_set_interlace_handling(png_ptr);
-
-        // Update  png_info structure after setting transformations:
-        png_read_update_info(png_ptr, info_ptr);
-
-        // get bytes per row:
-        rowbytes = png_get_rowbytes(png_ptr, info_ptr);
-
-        // allocate memory to store pixel data in:
-        png_data = (png_bytep)png_malloc(png_ptr, png_height * rowbytes);
-        if (!png_data)
-        {
-            throw FormatableException("png_malloc failed");
-        }
-
-        // make row pointers for reading:
-        row_pointers = new png_bytep[png_height];
-
-        // place the row pointers correctly:
-        for(png_uint_32 i = 0; i < png_height; i++)
-            row_pointers[png_height - 1 - i] = png_data + i * rowbytes;
-
-        png_read_image(png_ptr, row_pointers);
-
-        // Don't need row pointers anymore, png_data has been filled up.
-        delete [] row_pointers;
-
-        // read the end of the file:
-        png_read_end(png_ptr, end_info);
-
-        /*
-         * Here, we must tell OpenGL what type
-         * of pixels are stored in the data.
-         */
-        GLenum format;
-        switch (color_type)
-        {
-        case PNG_COLOR_TYPE_GRAY:
-            format = GL_LUMINANCE8;
-            break;
-        case PNG_COLOR_TYPE_GRAY_ALPHA:
-            format = GL_LUMINANCE8_ALPHA8;
-            break;
-        case PNG_COLOR_TYPE_RGB:
-            format = GL_RGB;
-            break;
-        case PNG_COLOR_TYPE_RGB_ALPHA:
-            format = GL_RGBA;
-            break;
-        }
-
-        // Create an OpenGL texture:
-        GLuint tex;
-        glGenTextures(1, &tex);
-        if (!tex)
-        {
-            throw GLException("generating GL texture for png", glGetError());
-        }
-
-        glBindTexture(GL_TEXTURE_2D, tex);
-
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-        // Make OpenGL fill the texture:
-        //gluBuild2DMipmaps ( GL_TEXTURE_2D, format, (GLsizei)png_width, (GLsizei)png_height, format, GL_UNSIGNED_BYTE, png_data);
-        glTexImage2D(GL_TEXTURE_2D, 0, format, (GLsizei)png_width, (GLsizei)png_height, 0, format, GL_UNSIGNED_BYTE, png_data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-
-        pTex->tex = tex;
-        pTex->w = (GLsizei)png_width;
-        pTex->h = (GLsizei)png_height;
-
-        png_free(png_ptr, png_data);
-        png_data = 0;
-
-        // clean up (also frees whatever was allocated with 'png_malloc'):
-        png_destroy_read_struct(&png_ptr, &info_ptr, &end_info);
-        png_ptr = 0;
-        info_ptr = 0;
-        end_info = 0;
-
-        glBindTexture(GL_TEXTURE_2D, 0);
+        // Read the end of the file.
+        png_read_end(pPNG, pEnd);
     }
-    catch (std::exception &e)
+    catch (...)
     {
-        if (png_data)
-            png_free(png_ptr, png_data);
+        // If something goes wrong, at least release the memory.
+        png_free(pPNG, pImage->data);
+        delete pImage;
+        delete[] pRows;
 
-        delete [] row_pointers; // free allocated row-pointers, if any
-        png_destroy_read_struct(&png_ptr, &info_ptr, &end_info); // clean up the read structure, info and end_info
-
-        throw e;
+        std::rethrow_exception(std::current_exception());
     }
+
+    // At this point, the row pointers aren't needed anymore.
+    delete[] pRows;
+
+    return pImage;
+}
+void PNGReader::FreeImage(PNGImage *pImage)
+{
+    png_free(pPNG, pImage->data);
+    delete pImage;
+};
+int PNGImage::GetColorType(void) const
+{
+    return colorType;
+}
+void PNGImage::GetDimensions(png_uint_32 &w, png_uint_32 &h) const
+{
+    w = width;
+    h = height;
+}
+const png_voidp PNGImage::GetData(void) const
+{
+    return data;
+}
+TextureError::TextureError(const char *format, ...)
+{
+    va_list pArgs;
+    va_start(pArgs, format);
+    vsnprintf(buffer, ERRORBUFFER_SIZE, format, pArgs);
+    va_end(pArgs);
+}
+void FillGLTexture(const PNGImage *pImage, const GLuint tex)
+{
+    GLLock lock = App::Instance().GetGLLock();
+
+    png_uint_32 w, h;
+    pImage->GetDimensions(w, h);
+
+    glBindTexture(GL_TEXTURE_2D, tex);
+    CHECK_GL();
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    CHECK_GL();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    CHECK_GL();
+
+    if (pImage->GetColorType() == PNG_COLOR_TYPE_RGB)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+                     (GLsizei)w, (GLsizei)h, 0, GL_RGB,
+                     GL_UNSIGNED_BYTE, pImage->GetData());
+
+    else if (pImage->GetColorType() == PNG_COLOR_TYPE_RGBA)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+                     (GLsizei)w, (GLsizei)h, 0, GL_RGBA,
+                     GL_UNSIGNED_BYTE, pImage->GetData());
+    CHECK_GL();
+
+    glGenerateMipmap(GL_TEXTURE_2D);
+    CHECK_GL();
+}
+PNGTextureLoadJob::PNGTextureLoadJob(const std::string &loc, const GLuint tex): location(loc), texture(tex)
+{
+}
+void PNGTextureLoadJob::Run(void)
+{
+    static thread_local PNGReader reader;
+    boost::filesystem::ifstream is;
+
+    boost::filesystem::path path = App::Instance().GetResourcePath((boost::format("textures/%1%.png") % location).str());
+    is.open(path, std::ios::binary);
+
+    if (!is.good())
+        throw IOError("Error reading %s", path.string().c_str());
+
+    std::unique_ptr<PNGImage, std::function<void(PNGImage *)>> pImage(reader.ReadImage(is), [&reader](PNGImage *p) { reader.FreeImage(p); });
+
+    is.close();
+
+    FillGLTexture(pImage.get(), texture);
 }

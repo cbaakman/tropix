@@ -8,8 +8,7 @@
 # binaries
 obj/*
 *.exe
-bin/server
-bin/client
+bin/*
 
 # Code blocks files
 *.depend

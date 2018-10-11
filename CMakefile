@@ -1,0 +1,30 @@
+CXX = g++
+CFLAGS = -std=c++17
+FONTFORGE = run_fontforge
+INKSCAPE = inkscape
+
+
+all: bin/tropix.exe
+
+clean:
+	del /S /F /Q bin\tropix.exe obj\*.o
+
+
+LIBS = boost_system boost_filesystem text-gl xml-mesh png glew32 opengl32 mingw32 SDL2main SDL2
+MODULES = app error event load game alloc shader texture render/quad
+
+bin/tropix.exe: $(MODULES:%=obj/%.o)
+	if not exist $(@D) (mkdir $(@D))
+	$(CXX) $(CFLAGS) $^ $(LIBS:%=-l%) -o $@
+
+obj/%.o: src/%.cpp
+	if not exist $(@D) (mkdir $(@D))
+	$(CXX) $(CFLAGS) -c $< -o $@
+
+bin/resources/textures/%.png: art/%.svg
+	if not exist $(@D) (mkdir $(@D))
+	$(INKSCAPE) --file=$< --export-png=$@
+
+bin/resources/%.svg: art/%.sfd
+	if not exist $(@D) (mkdir $(@D))
+	$(FONTFORGE) -lang=ff -c 'Open("$<"); Generate("$@")'
