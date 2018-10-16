@@ -127,14 +127,33 @@ void GroundRenderer::TellInit(Loader &loader)
     pIndexBuffer = App::Instance().GetGLManager()->AllocBuffer();
     SizeBuffers();
 }
+#define CLOSE_QUAD_SIZE 1.0f
+#define COUNT_CLOSE_QUADS 20
 float GroundRenderer::GetHorizontalCoord(const int i) const
 {
+    /*
+        Up to a given distance, the quads are same size.
+        Beyond that distance, the difference becomes exponential.
+     */
+
+    static const float closeDistance = CLOSE_QUAD_SIZE * COUNT_CLOSE_QUADS;
+
     if (i < 0)
-        return -exp(-i * log(maxDist) / subdiv);
+    {
+        if (i > -COUNT_CLOSE_QUADS)
+            return CLOSE_QUAD_SIZE * i;
+        else
+            return -closeDistance - exp(-(i + COUNT_CLOSE_QUADS) * log(maxDist - closeDistance) / (subdiv - COUNT_CLOSE_QUADS));
+    }
     else if (i == 0)
         return 0.0f;
-    else
-        return exp(i * log(maxDist) / subdiv);
+    else  // i > 0
+    {
+        if (i < COUNT_CLOSE_QUADS)
+            return CLOSE_QUAD_SIZE * i;
+        else
+            return closeDistance + exp((i - COUNT_CLOSE_QUADS) * log(maxDist - closeDistance) / (subdiv - COUNT_CLOSE_QUADS));
+    }
 }
 size_t GroundRenderer::GetIndexFor(const int ix, const int iz) const
 {
@@ -146,6 +165,9 @@ void GroundRenderer::Render(const mat4 &projection, const mat4 &view, const vec2
                             const vec4 &horizonColor, const vec3 &lightDirection)
 {
     size_t indexCount = 0;
+
+    float cx = floor(center.x / CLOSE_QUAD_SIZE) * CLOSE_QUAD_SIZE,
+          cz = floor(center.y / CLOSE_QUAD_SIZE) * CLOSE_QUAD_SIZE;
 
     glBindBuffer(GL_ARRAY_BUFFER, *pVertexBuffer);
     CHECK_GL();
@@ -164,15 +186,15 @@ void GroundRenderer::Render(const mat4 &projection, const mat4 &view, const vec2
 
     for (ix = start; ix <= end; ix++)
     {
-        x0 = GetHorizontalCoord(ix) + center.x;
-        x_ = GetHorizontalCoord(ix - 1) + center.x;
-        x1 = GetHorizontalCoord(ix + 1) + center.x;
+        x0 = GetHorizontalCoord(ix) + cx;
+        x_ = GetHorizontalCoord(ix - 1) + cx;
+        x1 = GetHorizontalCoord(ix + 1) + cx;
 
         for (iz = start; iz <= end; iz++)
         {
-            z0 = GetHorizontalCoord(iz) + center.y;
-            z_ = GetHorizontalCoord(iz - 1) + center.y;
-            z1 = GetHorizontalCoord(iz + 1) + center.y;
+            z0 = GetHorizontalCoord(iz) + cz;
+            z_ = GetHorizontalCoord(iz - 1) + cz;
+            z1 = GetHorizontalCoord(iz + 1) + cz;
 
             p00 = vec3(x0, mCalculator.GetVerticalCoord(vec2(x0, z0)), z0);
             p_0 = vec3(x_, mCalculator.GetVerticalCoord(vec2(x_, z0)), z0);
