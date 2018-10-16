@@ -11,15 +11,18 @@ using namespace glm;
 class SkyRenderer: Initializable
 {
     private:
+        float radius;
         size_t countLongitudes, countLattitudes;
         GLRef pSkyVertexBuffer, pSkyIndexBuffer,
               pProgram;
     public:
-        SkyRenderer(const size_t subdiv);
+        SkyRenderer(const float maxDist, const size_t subdiv);
 
         void TellInit(Loader &);
 
-        void Render(const mat4 &projection, const mat4 &view, const vec4 &horizonColor, const vec4 &skyColor);
+        void SetHeight(const float y);
+        void Render(const mat4 &projection, const mat4 &view, const float heightAboveHorizon,
+                    const vec4 &horizonColor, const vec4 &skyColor);
 };
 
 

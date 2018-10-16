@@ -26,7 +26,6 @@ class GroundRenderer: public Initializable
     private:
         GLfloat maxDist;
         size_t subdiv;
-        vec2 origin;
 
         GLRef pIndexBuffer,
               pVertexBuffer,
@@ -47,8 +46,7 @@ class GroundRenderer: public Initializable
 
         void TellInit(Loader &loader);
 
-        void CenterPosition(const vec2 &p);
-        void Render(const mat4 &projection, const mat4 &view,
+        void Render(const mat4 &projection, const mat4 &view, const vec2 &center,
                     const vec4 &horizonColor, const vec3 &lightDirection);
 };
 

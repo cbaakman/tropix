@@ -86,10 +86,6 @@ GroundGridCalculator::GroundGridCalculator(const WorldSeed seed)
 : mNoiseGenerator(seed)
 {
 }
-void GroundRenderer::CenterPosition(const vec2 &p)
-{
-    origin = p;
-}
 float GroundGridCalculator::GetVerticalCoord(const vec2 &p) const
 {
     return 10 * (mNoiseGenerator.Noise(p / 50.0f) + mNoiseGenerator.Noise(p / 250.0f));
@@ -146,7 +142,7 @@ size_t GroundRenderer::GetIndexFor(const int ix, const int iz) const
 
     return (subdiv + ix) * n + (subdiv + iz);
 }
-void GroundRenderer::Render(const mat4 &projection, const mat4 &view,
+void GroundRenderer::Render(const mat4 &projection, const mat4 &view, const vec2 &center,
                             const vec4 &horizonColor, const vec3 &lightDirection)
 {
     size_t indexCount = 0;
@@ -168,15 +164,15 @@ void GroundRenderer::Render(const mat4 &projection, const mat4 &view,
 
     for (ix = start; ix <= end; ix++)
     {
-        x0 = GetHorizontalCoord(ix) + origin.x;
-        x_ = GetHorizontalCoord(ix - 1) + origin.x;
-        x1 = GetHorizontalCoord(ix + 1) + origin.x;
+        x0 = GetHorizontalCoord(ix) + center.x;
+        x_ = GetHorizontalCoord(ix - 1) + center.x;
+        x1 = GetHorizontalCoord(ix + 1) + center.x;
 
         for (iz = start; iz <= end; iz++)
         {
-            z0 = GetHorizontalCoord(iz) + origin.y;
-            z_ = GetHorizontalCoord(iz - 1) + origin.y;
-            z1 = GetHorizontalCoord(iz + 1) + origin.y;
+            z0 = GetHorizontalCoord(iz) + center.y;
+            z_ = GetHorizontalCoord(iz - 1) + center.y;
+            z1 = GetHorizontalCoord(iz + 1) + center.y;
 
             p00 = vec3(x0, mCalculator.GetVerticalCoord(vec2(x0, z0)), z0);
             p_0 = vec3(x_, mCalculator.GetVerticalCoord(vec2(x_, z0)), z0);
@@ -264,7 +260,7 @@ void GroundRenderer::Render(const mat4 &projection, const mat4 &view,
     glUniform3fv(lightDirectionLocation, 1, value_ptr(lightDirection));
     CHECK_GL();
 
-    glUniform1f(horizonDistanceLocation, 5000.0f);
+    glUniform1f(horizonDistanceLocation, maxDist);
     CHECK_GL();
 
     glActiveTexture(GL_TEXTURE0);
