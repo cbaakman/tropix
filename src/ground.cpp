@@ -75,7 +75,6 @@ vec4 shade(vec4 light, vec4 color)
 void main()
 {
     float d = clamp(vertexIn.distance, 0.0, horizonDistance) / horizonDistance;
-    d = d * d;
     vec3 n = normalize(vertexIn.worldSpaceNormal);
     float l = clamp(-dot(lightDirection, n), 0.0, 1.0);
     vec4 texColor = texture(tex, vertexIn.texCoords);
@@ -265,7 +264,7 @@ void GroundRenderer::Render(const mat4 &projection, const mat4 &view,
     glUniform3fv(lightDirectionLocation, 1, value_ptr(lightDirection));
     CHECK_GL();
 
-    glUniform1f(horizonDistanceLocation, 500.0f);
+    glUniform1f(horizonDistanceLocation, 5000.0f);
     CHECK_GL();
 
     glActiveTexture(GL_TEXTURE0);
