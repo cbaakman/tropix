@@ -1,5 +1,5 @@
-#ifndef SHADER_H
-#define SHADER_H
+#ifndef SHADER_HPP
+#define SHADER_HPP
 
 #include <map>
 
@@ -38,4 +38,4 @@ class ShaderLoadJob: public LoadJob
         void Run(void);
 };
 
-#endif  // SHADER_H
+#endif  // SHADER_HPP

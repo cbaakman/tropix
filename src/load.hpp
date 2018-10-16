@@ -1,5 +1,5 @@
-#ifndef LOAD_H
-#define LOAD_H
+#ifndef LOAD_HPP
+#define LOAD_HPP
 
 #include <list>
 #include <exception>
@@ -56,7 +56,7 @@ class Loader
 class Initializable
 {
     public:
-        virtual void TellInitJobs(Loader &loader) = 0;
+        virtual void TellInit(Loader &loader) = 0;
 };
 
-#endif  // LOAD_H
+#endif  // LOAD_HPP

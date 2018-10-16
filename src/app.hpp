@@ -1,7 +1,8 @@
-#ifndef APP_H
-#define APP_H
+#ifndef APP_HPP
+#define APP_HPP
 
 #include <mutex>
+#include <atomic>
 
 #include <SDL2/SDL.h>
 #include <GL/glew.h>
@@ -27,9 +28,9 @@ class App: public EventListener
         SDL_Window *mMainWindow;
         SDL_GLContext mMainGLContext;
         std::recursive_mutex mtxGL;
+        size_t countLocksGL;
 
-        std::mutex mtxRunning;
-        bool running;
+        std::atomic<bool> running;
 
         std::mutex mtxCurrentScene;
         Scene *pCurrentScene;
@@ -56,6 +57,8 @@ class App: public EventListener
         GLManager *GetGLManager(void);
         boost::filesystem::path GetResourcePath(const std::string &location) const;
 
+        void GetScreenDimensions(size_t &w, size_t &h) const;
+
         GLLock GetGLLock(void);  // scoped
         void LockGL(void);
         void UnlockGL(void);
@@ -75,4 +78,4 @@ class GLLock
         ~GLLock(void);
 };
 
-#endif  // APP_H
+#endif  // APP_HPP

@@ -1,5 +1,5 @@
-#ifndef ALLOC_H
-#define ALLOC_H
+#ifndef ALLOC_HPP
+#define ALLOC_HPP
 
 #include <functional>
 #include <list>
@@ -88,4 +88,4 @@ class GLScoped
 };
 
 
-#endif  // ALLOC_H
+#endif  // ALLOC_HPP

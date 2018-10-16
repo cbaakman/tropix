@@ -1,7 +1,12 @@
-#ifndef CONFIG_H
-#define CONFIG_H
+#ifndef CONFIG_HPP
+#define CONFIG_HPP
 
+#include <map>
 #include <stddef.h>
+
+#include <GL/glew.h>
+#include <GL/gl.h>
+#include <SDL2/SDL.h>
 
 
 struct Resolution
@@ -9,6 +14,23 @@ struct Resolution
     size_t width, height;
 };
 
+struct Rendering
+{
+    GLfloat distance;
+    size_t gridSubdiv;
+};
+
+enum KeyBinding
+{
+    KEYB_JUMP,
+    KEYB_DUCK,
+    KEYB_GOFORWARD,
+    KEYB_GOBACK,
+    KEYB_GOLEFT,
+    KEYB_GORIGHT,
+};
+
+typedef std::map<KeyBinding, SDL_Keycode> Controls;
 
 struct Config
 {
@@ -16,6 +38,10 @@ struct Config
 
     bool fullscreen;
     Resolution resolution;
+
+    Rendering render;
+
+    Controls controls;
 };
 
-#endif  // CONFIG_H
+#endif  // CONFIG_HPP

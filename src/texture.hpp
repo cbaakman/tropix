@@ -1,5 +1,5 @@
-#ifndef TEXTURE_H
-#define TEXTURE_H
+#ifndef TEXTURE_HPP
+#define TEXTURE_HPP
 
 #include <iostream>
 #include <string>
@@ -70,4 +70,4 @@ class PNGTextureLoadJob: public LoadJob
 };
 
 
-#endif  // TEXTURE_H
+#endif  // TEXTURE_HPP

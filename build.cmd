@@ -1,3 +1,1 @@
-make -f CMakefile
-
-bin\tropix.exe
+make -f CMakefile && bin\tropix.exe

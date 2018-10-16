@@ -1,5 +1,5 @@
-#ifndef RENDERQUAD_H
-#define RENDERQUAD_H
+#ifndef RENDERQUAD_HPP
+#define RENDERQUAD_HPP
 
 #include <GL/glew.h>
 #include <GL/gl.h>
@@ -28,9 +28,9 @@ class QuadRenderer: public Initializable
     private:
         GLRef pProgram, pBuffer;
     public:
-        void TellInitJobs(Loader &);
+        void TellInit(Loader &);
 
         void Render(const mat4 &projection, const RenderQuad &);
 };
 
-#endif  // RENDERQUAD_H
+#endif  // RENDERQUAD_HPP

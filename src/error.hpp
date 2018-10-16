@@ -1,5 +1,5 @@
-#ifndef ERROR_H
-#define ERROR_H
+#ifndef ERROR_HPP
+#define ERROR_HPP
 
 #include <cstdarg>
 #include <cstdio>
@@ -76,4 +76,4 @@ void CheckUniformLocation(GLint location, const char *filename, const size_t lin
 
 #define CHECK_UNIFORM_LOCATION(loc) CheckUniformLocation(loc, __FILE__, __LINE__)
 
-#endif  // ERROR_H
+#endif  // ERROR_HPP

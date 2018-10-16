@@ -57,7 +57,7 @@ void QuadSizeBuffer(const GLuint buffer)
     glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(QuadVertex), NULL, GL_DYNAMIC_DRAW);
     CHECK_GL();
 }
-void QuadRenderer::TellInitJobs(Loader &loader)
+void QuadRenderer::TellInit(Loader &loader)
 {
     pBuffer = App::Instance().GetGLManager()->AllocBuffer();
     QuadSizeBuffer(*pBuffer);

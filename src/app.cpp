@@ -14,7 +14,7 @@ App &App::Instance(void)
 }
 App::App(void)
 : mMainGLContext(NULL), mMainWindow(NULL), running(false),
-  pCurrentScene(NULL)
+  pCurrentScene(NULL), countLocksGL(0)
 {
 }
 App::~App(void)
@@ -39,6 +39,16 @@ void App::GetConfig(Config &config)
     config.fullscreen = false;
     config.resolution.width = 800;
     config.resolution.height = 600;
+
+    config.render.distance = 100.0f;
+    config.render.gridSubdiv = 50;
+
+    config.controls[KEYB_JUMP] = SDLK_SPACE;
+    config.controls[KEYB_DUCK] = SDLK_LSHIFT;
+    config.controls[KEYB_GOFORWARD] = SDLK_w;
+    config.controls[KEYB_GOBACK] = SDLK_s;
+    config.controls[KEYB_GOLEFT] = SDLK_a;
+    config.controls[KEYB_GORIGHT] = SDLK_d;
 }
 GLManager *App::GetGLManager(void)
 {
@@ -87,6 +97,11 @@ void App::Init(void)
         throw InitError("SDL_CreateWindow failed: %s", SDL_GetError());
     }
 
+    if (SDL_SetRelativeMouseMode(SDL_TRUE) < 0)
+    {
+        throw InitError("Failed to set relative mouse mode: %s", SDL_GetError());
+    }
+
     mMainGLContext = SDL_GL_CreateContext(mMainWindow);
     if (!mMainGLContext)
     {
@@ -107,9 +122,19 @@ void App::Init(void)
     // Keep the context free until locked.
     SDL_GL_MakeCurrent(NULL, NULL);
 }
+void App::GetScreenDimensions(size_t &width, size_t &height) const
+{
+    int w, h;
+    SDL_GetWindowSize(mMainWindow, &w, &h);
+
+    width = w;
+    height = h;
+}
 void App::LockGL(void)
 {
     mtxGL.lock();
+    countLocksGL++;
+
     if (SDL_GL_MakeCurrent(mMainWindow, mMainGLContext) != 0)
     {
         throw GLError("SDL_GL_MakeCurrent: %s", SDL_GetError());
@@ -117,7 +142,9 @@ void App::LockGL(void)
 }
 void App::UnlockGL(void)
 {
-    if (SDL_GL_MakeCurrent(NULL, NULL) != 0)
+    countLocksGL--;
+
+    if (countLocksGL <= 0 && SDL_GL_MakeCurrent(NULL, NULL) != 0)
     {
         throw GLError("SDL_GL_MakeCurrent: %s", SDL_GetError());
     }
@@ -143,20 +170,24 @@ void App::Run(void)
 
     Config config;
     GetConfig(config);
-
-    pCurrentScene = new InGameScene;
+    {
+        std::scoped_lock lock(mtxCurrentScene);
+        pCurrentScene = new InGameScene(config);
+    }
 
     // Load resources.
     Loader loader(config.loadConcurrency);
 
-    pCurrentScene->TellInitJobs(loader);
+    {
+        GLLock lockGL = GetGLLock();
+        std::scoped_lock lock(mtxCurrentScene);
+
+        pCurrentScene->TellInit(loader);
+    }
+
     loader.Run();
 
-    // Use a separate scope for thread-safety.
-    {
-        std::scoped_lock lock(mtxRunning);
-        running = true;
-    }
+    running = true;
 
     while (IsRunning())
     {
@@ -168,6 +199,7 @@ void App::Run(void)
 
             {
                 std::scoped_lock lock(mtxCurrentScene);
+                pCurrentScene->Update();
                 pCurrentScene->Render();
             }
 
@@ -176,27 +208,30 @@ void App::Run(void)
     }
 
     mGLManager.GarbageCollect();
-
     delete pCurrentScene;
 
     Free();
 }
 void App::OnEvent(const SDL_Event &event)
 {
+    std::scoped_lock lock(mtxCurrentScene);
+
     if (event.type == SDL_QUIT)
         StopRunning();
-    else
-        EventListener::OnEvent(event);
+
+    else if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)
+        StopRunning();
+
+    else if (pCurrentScene != NULL)
+        pCurrentScene->OnEvent(event);
 }
 void App::StopRunning(void)
 {
-    std::scoped_lock lock(mtxRunning);
     running = false;
 }
 
 bool App::IsRunning(void)
 {
-    std::scoped_lock lock(mtxRunning);
     return running;
 }
 

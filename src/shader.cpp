@@ -1,9 +1,32 @@
 #include <iostream>
+#include <memory>
 
 #include "shader.hpp"
 #include "app.hpp"
 #include "alloc.hpp"
 
+
+
+std::string getShaderTypeName(const GLenum type)
+{
+    switch (type)
+    {
+    case GL_COMPUTE_SHADER:
+        return "GL_COMPUTE_SHADER";
+    case GL_VERTEX_SHADER:
+        return "GL_VERTEX_SHADER";
+    case GL_TESS_CONTROL_SHADER:
+        return "GL_TESS_CONTROL_SHADER";
+    case GL_TESS_EVALUATION_SHADER:
+        return "GL_TESS_EVALUATION_SHADER";
+    case GL_GEOMETRY_SHADER:
+        return "GL_GEOMETRY_SHADER";
+    case GL_FRAGMENT_SHADER:
+        return "GL_FRAGMENT_SHADER";
+    default:
+        throw GLError("unknown shader type");
+    };
+}
 
 GLuint MakeShader(const std::string &source, const GLenum type)
 {
@@ -28,17 +51,14 @@ GLuint MakeShader(const std::string &source, const GLenum type)
         glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logLength);
         CHECK_GL();
 
-        char *errorString = new char[logLength + 1];
-        glGetShaderInfoLog(shader, logLength, NULL, errorString);
+        std::unique_ptr<char[]> errorString(new char[logLength + 1]);
+        glGetShaderInfoLog(shader, logLength, NULL, errorString.get());
         CHECK_GL();
-
-        ShaderError error("error while compiling shader: %s", errorString);
-        delete[] errorString;
 
         glDeleteShader(shader);
         CHECK_GL();
 
-        throw error;
+        throw ShaderError("error while compiling %s: %s", getShaderTypeName(type).c_str(), errorString.get());
     }
 
     return shader;
@@ -76,14 +96,11 @@ void LinkShaders(const GLuint program,
         glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
         CHECK_GL();
 
-        char *errorString = new char[logLength + 1];
-        glGetProgramInfoLog(program, logLength, NULL, errorString);
+        std::unique_ptr<char[]> errorString(new char[logLength + 1]);
+        glGetProgramInfoLog(program, logLength, NULL, errorString.get());
         CHECK_GL();
 
-        ShaderError error("error while linking shader: %s", errorString);
-        delete[] errorString;
-
-        throw error;
+        throw ShaderError("error while linking shader: %s", errorString.get());
     }
 }
 
