@@ -10,6 +10,13 @@
 #include "texture.hpp"
 
 
+struct GroundRenderVertex
+{
+    vec3 position,
+         normal;
+};
+typedef unsigned int GroundRenderIndex;
+
 #define GROUND_POSITION_INDEX 0
 #define GROUND_NORMAL_INDEX 1
 
@@ -37,6 +44,7 @@ void main()
     vertexOut.distance = -(viewMatrix * vec4(position, 1.0)).z;
 }
 )shader",
+
 groundFragmentShaderSrc[] = R"shader(
 #version 150
 
@@ -44,7 +52,7 @@ uniform sampler2D tex;
 
 uniform vec3 lightDirection;
 uniform vec4 horizonColor;
-uniform float maxDistance;
+uniform float horizonDistance;
 
 const vec4 sunColor = vec4(0.8, 0.6, 0.3, 1.0);
 const vec4 ambientColor = vec4(0.2, 0.4, 0.7, 1.0);
@@ -64,10 +72,9 @@ vec4 shade(vec4 light, vec4 color)
     return vec4(light.r * color.r, light.g * color.g, light.b * color.b, light.a * color.a);
 }
 
-
 void main()
 {
-    float d = clamp(vertexIn.distance, 0.0, maxDistance) / maxDistance;
+    float d = clamp(vertexIn.distance, 0.0, horizonDistance) / horizonDistance;
     d = d * d;
     vec3 n = normalize(vertexIn.worldSpaceNormal);
     float l = clamp(-dot(lightDirection, n), 0.0, 1.0);
@@ -76,38 +83,38 @@ void main()
 }
 )shader";
 
-GroundGridCalculator::GroundGridCalculator(const WorldSeed seed,
-                                           const float r,
-                                           const size_t s)
-: SurfaceGridCalculator(r, s), mNoiseGenerator(seed)
+GroundGridCalculator::GroundGridCalculator(const WorldSeed seed)
+: mNoiseGenerator(seed)
 {
 }
 void GroundRenderer::CenterPosition(const vec2 &p)
 {
-    float x = floor(p.x / mCalculator.GetQuadSize()),
-          z = floor(p.y / mCalculator.GetQuadSize());
-
-    mCalculator.origin.x = mCalculator.GetQuadSize() * x;
-    mCalculator.origin.y = mCalculator.GetQuadSize() * z;
+    origin = p;
 }
-float GroundGridCalculator::GetAmplitude(const vec2 &p) const
+float GroundGridCalculator::GetVerticalCoord(const vec2 &p) const
 {
-    return 10 * (mNoiseGenerator.Noise((origin + p) / 50.0f) + mNoiseGenerator.Noise((origin + p) / 250.0f));
+    return 10 * (mNoiseGenerator.Noise(p / 50.0f) + mNoiseGenerator.Noise(p / 250.0f));
 }
 GroundRenderer::GroundRenderer(const WorldSeed seed, const GLfloat renderDist, const size_t renderSubdiv)
-: mCalculator(seed, renderDist, renderSubdiv), renderDistance(renderDist)
+: mCalculator(seed), maxDist(renderDist), subdiv(renderSubdiv)
 {
+}
+size_t GroundRenderer::GetPointsPerRow(void) const
+{
+    return 1 + 2 * subdiv;
 }
 void GroundRenderer::SizeBuffers(void)
 {
+    size_t pointsPerRow = GetPointsPerRow(),
+           quadsPerRow = pointsPerRow - 1;
     glBindBuffer(GL_ARRAY_BUFFER, *pVertexBuffer);
     CHECK_GL();
-    glBufferData(GL_ARRAY_BUFFER, mCalculator.CountPoints() * sizeof(GroundRenderVertex), NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, pointsPerRow * pointsPerRow * sizeof(GroundRenderVertex), NULL, GL_DYNAMIC_DRAW);
     CHECK_GL();
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *pIndexBuffer);
     CHECK_GL();
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * mCalculator.CountQuads() * sizeof(GroundRenderIndex), NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * quadsPerRow * quadsPerRow * sizeof(GroundRenderIndex), NULL, GL_DYNAMIC_DRAW);
     CHECK_GL();
 }
 void GroundRenderer::TellInit(Loader &loader)
@@ -125,44 +132,81 @@ void GroundRenderer::TellInit(Loader &loader)
     pIndexBuffer = App::Instance().GetGLManager()->AllocBuffer();
     SizeBuffers();
 }
-void GroundRenderer::RenderStart(void)
+float GroundRenderer::GetHorizontalCoord(const int i) const
 {
-    indexCount = 0;
+    if (i < 0)
+        return -exp(-i * log(maxDist) / subdiv);
+    else if (i == 0)
+        return 0.0f;
+    else
+        return exp(i * log(maxDist) / subdiv);
+}
+size_t GroundRenderer::GetIndexFor(const int ix, const int iz) const
+{
+    int n = GetPointsPerRow();
+
+    return (subdiv + ix) * n + (subdiv + iz);
+}
+void GroundRenderer::Render(const mat4 &projection, const mat4 &view,
+                            const vec4 &horizonColor, const vec3 &lightDirection)
+{
+    size_t indexCount = 0;
 
     glBindBuffer(GL_ARRAY_BUFFER, *pVertexBuffer);
     CHECK_GL();
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *pIndexBuffer);
     CHECK_GL();
 
-    vertices = (GroundRenderVertex *)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+    GroundRenderVertex *vertices = (GroundRenderVertex *)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
     CHECK_GL();
-    indices = (GroundRenderIndex *)glMapBuffer(GL_ELEMENT_ARRAY_BUFFER, GL_WRITE_ONLY);
+    GroundRenderIndex *indices = (GroundRenderIndex *)glMapBuffer(GL_ELEMENT_ARRAY_BUFFER, GL_WRITE_ONLY);
     CHECK_GL();
-}
-void GroundRenderer::OnPoint(const size_t i, const SurfaceGridPoint &p)
-{
-    vertices[i].position.x = p.position.x + mCalculator.origin.x;
-    vertices[i].position.y = p.position.y;
-    vertices[i].position.z = p.position.z + mCalculator.origin.y;
 
-    vertices[i].normal = p.normal;
-}
-void GroundRenderer::OnQuad(const size_t i0, const size_t i1, const size_t i2, const size_t i3)
-{
-    indices[indexCount + 0] = i0;
-    indices[indexCount + 1] = i1;
-    indices[indexCount + 2] = i2;
+    vec3 p_0, p10, p0_, p01, p00, t, b, n;
+    float x0, x_, x1, z0, z_, z1;
+    signed int ix, iz,
+               start = -subdiv, end = subdiv;
 
-    indices[indexCount + 3] = i0;
-    indices[indexCount + 4] = i2;
-    indices[indexCount + 5] = i3;
+    for (ix = start; ix <= end; ix++)
+    {
+        x0 = GetHorizontalCoord(ix) + origin.x;
+        x_ = GetHorizontalCoord(ix - 1) + origin.x;
+        x1 = GetHorizontalCoord(ix + 1) + origin.x;
 
-    indexCount += 6;
-}
-void GroundRenderer::RenderEnd(const mat4 &projection, const mat4 &view,
-                               const vec4 &horizonColor, const vec3 &lightDirection,
-                               const GLuint texture)
-{
+        for (iz = start; iz <= end; iz++)
+        {
+            z0 = GetHorizontalCoord(iz) + origin.y;
+            z_ = GetHorizontalCoord(iz - 1) + origin.y;
+            z1 = GetHorizontalCoord(iz + 1) + origin.y;
+
+            p00 = vec3(x0, mCalculator.GetVerticalCoord(vec2(x0, z0)), z0);
+            p_0 = vec3(x_, mCalculator.GetVerticalCoord(vec2(x_, z0)), z0);
+            p0_ = vec3(x0, mCalculator.GetVerticalCoord(vec2(x0, z_)), z_);
+            p10 = vec3(x1, mCalculator.GetVerticalCoord(vec2(x1, z0)), z0);
+            p01 = vec3(x0, mCalculator.GetVerticalCoord(vec2(x0, z1)), z1);
+
+            t = normalize(normalize(p00 - p_0) + normalize(p10 - p00));
+            b = normalize(normalize(p00 - p01) + normalize(p0_ - p00));
+            n = cross(t, b);
+
+            vertices[GetIndexFor(ix, iz)].position = p00;
+            vertices[GetIndexFor(ix, iz)].normal = n;
+
+            if (ix < end && iz < end)
+            {
+                indices[indexCount + 0] = GetIndexFor(ix, iz);
+                indices[indexCount + 1] = GetIndexFor(ix, iz + 1);
+                indices[indexCount + 2] = GetIndexFor(ix + 1, iz + 1);
+
+                indices[indexCount + 3] = GetIndexFor(ix, iz);
+                indices[indexCount + 4] = GetIndexFor(ix + 1, iz + 1);
+                indices[indexCount + 5] = GetIndexFor(ix + 1, iz);
+
+                indexCount += 6;
+            }
+        }
+    }
+
     glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
     CHECK_GL();
     glUnmapBuffer(GL_ARRAY_BUFFER);
@@ -187,7 +231,7 @@ void GroundRenderer::RenderEnd(const mat4 &projection, const mat4 &view,
           viewMatrixLocation,
           horizonColorLocation,
           lightDirectionLocation,
-          maxDistanceLocation;
+          horizonDistanceLocation;
 
     projectionMatrixLocation = glGetUniformLocation(*pProgram, "projectionMatrix");
     CHECK_GL();
@@ -205,9 +249,9 @@ void GroundRenderer::RenderEnd(const mat4 &projection, const mat4 &view,
     CHECK_GL();
     CHECK_UNIFORM_LOCATION(lightDirectionLocation);
 
-    maxDistanceLocation =  glGetUniformLocation(*pProgram, "maxDistance");
+    horizonDistanceLocation =  glGetUniformLocation(*pProgram, "horizonDistance");
     CHECK_GL();
-    CHECK_UNIFORM_LOCATION(maxDistanceLocation);
+    CHECK_UNIFORM_LOCATION(horizonDistanceLocation);
 
     glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, value_ptr(projection));
     CHECK_GL();
@@ -221,13 +265,13 @@ void GroundRenderer::RenderEnd(const mat4 &projection, const mat4 &view,
     glUniform3fv(lightDirectionLocation, 1, value_ptr(lightDirection));
     CHECK_GL();
 
-    glUniform1f(maxDistanceLocation, renderDistance);
+    glUniform1f(horizonDistanceLocation, 500.0f);
     CHECK_GL();
 
     glActiveTexture(GL_TEXTURE0);
     CHECK_GL();
 
-    glBindTexture(GL_TEXTURE_2D, texture);
+    glBindTexture(GL_TEXTURE_2D, *pTexture);
     CHECK_GL();
 
     glEnable(GL_CULL_FACE);
@@ -251,11 +295,4 @@ void GroundRenderer::RenderEnd(const mat4 &projection, const mat4 &view,
     CHECK_GL();
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     CHECK_GL();
-}
-void GroundRenderer::Render(const mat4 &projection, const mat4 &view,
-                            const vec4 &horizonColor, const vec3 &lightDirection)
-{
-    RenderStart();
-    mCalculator.Iter(this, this);
-    RenderEnd(projection, view, horizonColor, lightDirection, *pTexture);
 }

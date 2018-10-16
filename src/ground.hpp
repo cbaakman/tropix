@@ -7,52 +7,41 @@ using namespace glm;
 #include "load.hpp"
 #include "alloc.hpp"
 #include "noise.hpp"
-#include "grid.hpp"
 
 
-struct GroundRenderVertex
-{
-    vec3 position,
-         normal;
-};
-typedef unsigned int GroundRenderIndex;
-
-class GroundGridCalculator: public SurfaceGridCalculator
+class GroundGridCalculator
 {
     private:
-        vec2 origin;
         PerlinNoiseGenerator2D mNoiseGenerator;
     public:
-        GroundGridCalculator(const WorldSeed, const float radius, const size_t subdiv);
+        GroundGridCalculator(const WorldSeed);
 
-        float GetAmplitude(const vec2 &coords) const;
+        float GetVerticalCoord(const vec2 &coords) const;
 
     friend class GroundRenderer;
 };
 
-class GroundRenderer: public SurfaceGridPointActuator, SurfaceGridQuadActuator, Initializable
+class GroundRenderer: public Initializable
 {
     private:
-        GroundRenderVertex *vertices;
-        GroundRenderIndex *indices;
-        size_t indexCount;
+        GLfloat maxDist;
+        size_t subdiv;
+        vec2 origin;
 
         GLRef pIndexBuffer,
               pVertexBuffer,
               pProgram,
               pTexture;
 
+        size_t GetPointsPerRow(void) const;
+
+        size_t GetIndexFor(const int ix, const int iz) const;
+
+        float GetHorizontalCoord(const int i) const;
+
         void SizeBuffers(void);
 
         GroundGridCalculator mCalculator;
-        GLfloat renderDistance;
-
-        void RenderStart(void);
-        void OnPoint(const size_t i, const SurfaceGridPoint &);
-        void OnQuad(const size_t i0, const size_t i1, const size_t i2, const size_t i3);
-        void RenderEnd(const mat4 &projection, const mat4 &view,
-                       const vec4 &horizonColor, const vec3 &lightDirection,
-                       const GLuint texture);
     public:
         GroundRenderer(const WorldSeed, const GLfloat renderDistance, const size_t renderSubdiv);
 

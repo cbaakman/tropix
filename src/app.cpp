@@ -40,7 +40,7 @@ void App::GetConfig(Config &config)
     config.resolution.width = 800;
     config.resolution.height = 600;
 
-    config.render.distance = 100.0f;
+    config.render.distance = 100000.0f;
     config.render.gridSubdiv = 50;
 
     config.controls[KEYB_JUMP] = SDLK_SPACE;

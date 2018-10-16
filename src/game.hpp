@@ -29,6 +29,7 @@ class InGameScene: public Scene
 
         vec3 position;
         float yaw, pitch;
+        GLfloat renderDistance;
 
         double dayCycle;
         GroundRenderer mGroundRenderer;

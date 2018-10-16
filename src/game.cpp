@@ -15,6 +15,7 @@ InGameScene::InGameScene(const Config &config)
 : mGroundRenderer(483417628069, config.render.distance, config.render.gridSubdiv),
   mSkyRenderer(config.render.gridSubdiv),
   yaw(0.0f), pitch(0.0f), position(0.0f, 2.0f, 0.0f),
+  renderDistance(config.render.distance),
   prevTime(std::chrono::system_clock::now())
 {
     mKeyInterpreter.Set(config.controls);
@@ -91,7 +92,7 @@ void InGameScene::Render(void)
 
     size_t w, h;
     App::Instance().GetScreenDimensions(w, h);
-    proj = perspectiveFov(45.0f, (GLfloat)w, (GLfloat)h, 0.1f, 1000.0f);
+    proj = perspectiveFov(45.0f, (GLfloat)w, (GLfloat)h, 0.1f, renderDistance);
 
     view = translate(view, position);
     view = rotate(view, radians(yaw), vec3(0.0f, 1.0f, 0.0f));
