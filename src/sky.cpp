@@ -213,7 +213,7 @@ void SkyRenderer::Render(const mat4 &projection, const mat4 &view,
 
     heightAboveHorizonLocation = glGetUniformLocation(*pProgram, "heightAboveHorizon");
     CHECK_GL();
-    CHECK_UNIFORM_LOCATION(horizonColorLocation);
+    CHECK_UNIFORM_LOCATION(heightAboveHorizonLocation);
 
     radiusLocation = glGetUniformLocation(*pProgram, "radius");
     CHECK_GL();
