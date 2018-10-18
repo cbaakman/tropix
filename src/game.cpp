@@ -12,8 +12,8 @@
 #define DAYPERIOD 5.0
 
 InGameScene::InGameScene(const Config &config)
-: mGroundRenderer(483417628069, config.render.distance, config.render.gridSubdiv),
-  mSkyRenderer(config.render.distance, config.render.gridSubdiv),
+: mGroundRenderer(483417628069, config.render.distance),
+  mSkyRenderer(config.render.distance, 20),
   yaw(0.0f), pitch(0.0f), position(0.0f, 2.0f, 0.0f),
   renderDistance(config.render.distance),
   prevTime(std::chrono::system_clock::now())
@@ -101,7 +101,7 @@ void InGameScene::Render(void)
 
     mSkyRenderer.Render(proj, view, position.y, horizonColor, skyColor);
 
-    mGroundRenderer.Render(proj, view, vec2(position.x, position.z), horizonColor, lightDirection);
+    mGroundRenderer.Render(proj, view, position, horizonColor, lightDirection);
 }
 #define MOUSE_SENSITIVITY 1.0f
 void InGameScene::OnMouseMove(const SDL_MouseMotionEvent &event)

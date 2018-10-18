@@ -1,53 +1,58 @@
 #ifndef GROUND_HPP
 #define GROUND_HPP
 
+#include <unordered_map>
+
 #include <glm/glm.hpp>
 using namespace glm;
+#include <GL/glew.h>
+#include <GL/gl.h>
 
 #include "load.hpp"
 #include "alloc.hpp"
 #include "noise.hpp"
+#include "chunk.hpp"
 
 
-class GroundGridCalculator
+class GroundGenerator
 {
     private:
         PerlinNoiseGenerator2D mNoiseGenerator;
     public:
-        GroundGridCalculator(const WorldSeed);
+        GroundGenerator(const WorldSeed);
 
         float GetVerticalCoord(const vec2 &coords) const;
+};
 
-    friend class GroundRenderer;
+
+struct GroundChunkRenderObj
+{
+    GLRef pVertexBuffer,
+          pIndexBuffer;
 };
 
 class GroundRenderer: public Initializable
 {
     private:
-        GLfloat maxDist;
-        size_t subdiv;
+        GLfloat renderDistance;
 
-        GLRef pIndexBuffer,
-              pVertexBuffer,
-              pProgram,
+        std::unordered_map<ChunkID, GroundChunkRenderObj> mChunkRenderObjs;
+
+        GLRef pProgram,
               pTexture;
 
-        size_t GetPointsPerRow(void) const;
+        GroundGenerator mGenerator;
 
-        size_t GetIndexFor(const int ix, const int iz) const;
-
-        float GetHorizontalCoord(const int i) const;
-
-        void SizeBuffers(void);
-
-        GroundGridCalculator mCalculator;
+        void PrepareForChunk(const ChunkID &);
     public:
-        GroundRenderer(const WorldSeed, const GLfloat renderDistance, const size_t renderSubdiv);
+        GroundRenderer(const WorldSeed, const GLfloat renderDistance);
 
         void TellInit(Loader &loader);
 
-        void Render(const mat4 &projection, const mat4 &view, const vec2 &center,
+        void Render(const mat4 &projection, const mat4 &view, const vec3 &center,
                     const vec4 &horizonColor, const vec3 &lightDirection);
+
+    friend class GroundChunkRenderLoadJob;
 };
 
 #endif  // GROUND_HPP

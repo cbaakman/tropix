@@ -17,7 +17,6 @@ struct Resolution
 struct Rendering
 {
     GLfloat distance;
-    size_t gridSubdiv;
 };
 
 enum KeyBinding

@@ -82,36 +82,118 @@ void main()
 }
 )shader";
 
-GroundGridCalculator::GroundGridCalculator(const WorldSeed seed)
+GroundGenerator::GroundGenerator(const WorldSeed seed)
 : mNoiseGenerator(seed)
 {
 }
-float GroundGridCalculator::GetVerticalCoord(const vec2 &p) const
+float GroundGenerator::GetVerticalCoord(const vec2 &p) const
 {
     return 10 * (mNoiseGenerator.Noise(p / 50.0f) + mNoiseGenerator.Noise(p / 250.0f));
 }
-GroundRenderer::GroundRenderer(const WorldSeed seed, const GLfloat renderDist, const size_t renderSubdiv)
-: mCalculator(seed), maxDist(renderDist), subdiv(renderSubdiv)
+GroundRenderer::GroundRenderer(const WorldSeed seed, const GLfloat renderDist)
+: mGenerator(seed), renderDistance(renderDist)
 {
 }
-size_t GroundRenderer::GetPointsPerRow(void) const
+#define COUNT_CHUNKROW_POINTS (COUNT_CHUNKROW_TILES + 1)
+size_t GetOnChunkIndexFor(const size_t ix, const size_t iz)
 {
-    return 1 + 2 * subdiv;
+    return ix * COUNT_CHUNKROW_POINTS + iz;
 }
-void GroundRenderer::SizeBuffers(void)
+#define COUNT_GROUND_CHUNKRENDER_INDICES (6 * COUNT_CHUNKROW_TILES * COUNT_CHUNKROW_TILES)
+#define COUNT_GROUND_CHUNKRENDER_VERTICES (COUNT_CHUNKROW_POINTS * COUNT_CHUNKROW_POINTS)
+#define GROUND_VERTEXBUFFER_SIZE (COUNT_GROUND_CHUNKRENDER_VERTICES * sizeof(GroundRenderVertex))
+#define GROUND_INDEXBUFFER_SIZE (COUNT_GROUND_CHUNKRENDER_INDICES * sizeof(GroundRenderIndex))
+void GroundRenderer::PrepareForChunk(const ChunkID &id)
 {
-    size_t pointsPerRow = GetPointsPerRow(),
-           quadsPerRow = pointsPerRow - 1;
-    glBindBuffer(GL_ARRAY_BUFFER, *pVertexBuffer);
+    GLLock scopedLock = App::Instance().GetGLLock();
+
+    mChunkRenderObjs[id].pVertexBuffer = App::Instance().GetGLManager()->AllocBuffer();
+    mChunkRenderObjs[id].pIndexBuffer = App::Instance().GetGLManager()->AllocBuffer();
+
+    glBindBuffer(GL_ARRAY_BUFFER, *(mChunkRenderObjs[id].pVertexBuffer));
     CHECK_GL();
-    glBufferData(GL_ARRAY_BUFFER, pointsPerRow * pointsPerRow * sizeof(GroundRenderVertex), NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, GROUND_VERTEXBUFFER_SIZE, NULL, GL_DYNAMIC_DRAW);
     CHECK_GL();
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *pIndexBuffer);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *(mChunkRenderObjs[id].pIndexBuffer));
     CHECK_GL();
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * quadsPerRow * quadsPerRow * sizeof(GroundRenderIndex), NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, GROUND_INDEXBUFFER_SIZE, NULL, GL_DYNAMIC_DRAW);
+    CHECK_GL();
+
+    GroundRenderVertex *vertices = (GroundRenderVertex *)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+    CHECK_GL();
+    GroundRenderIndex *indices = (GroundRenderIndex *)glMapBuffer(GL_ELEMENT_ARRAY_BUFFER, GL_WRITE_ONLY);
+    CHECK_GL();
+
+    float ox = (float(id.x) - 0.5f) * CHUNK_SIZE,
+          oz = (float(id.z) - 0.5f) * CHUNK_SIZE,
+          x0, x_, x1, z0, z_, z1;
+
+    vec3 p_0, p10, p0_, p01, p00, t, b, n;
+    size_t ix, iz, i, indexCount = 0;
+
+    for (ix = 0; ix < COUNT_CHUNKROW_POINTS; ix++)
+    {
+        x0 = ox + float(ix) * TILE_SIZE;
+        x_ = ox + float(ix - 1) * TILE_SIZE;
+        x1 = ox + float(ix + 1) * TILE_SIZE;
+
+        for (iz = 0; iz < COUNT_CHUNKROW_POINTS; iz++)
+        {
+            z0 = oz + float(iz) * TILE_SIZE;
+            z_ = oz + float(iz - 1) * TILE_SIZE;
+            z1 = oz + float(iz + 1) * TILE_SIZE;
+
+            p00 = vec3(x0, mGenerator.GetVerticalCoord(vec2(x0, z0)), z0);
+            p_0 = vec3(x_, mGenerator.GetVerticalCoord(vec2(x_, z0)), z0);
+            p0_ = vec3(x0, mGenerator.GetVerticalCoord(vec2(x0, z_)), z_);
+            p10 = vec3(x1, mGenerator.GetVerticalCoord(vec2(x1, z0)), z0);
+            p01 = vec3(x0, mGenerator.GetVerticalCoord(vec2(x0, z1)), z1);
+
+            t = normalize(normalize(p00 - p_0) + normalize(p10 - p00));
+            b = normalize(normalize(p00 - p01) + normalize(p0_ - p00));
+            n = cross(t, b);
+
+            i = GetOnChunkIndexFor(ix, iz);
+
+            vertices[i].position = p00;
+            vertices[i].normal = n;
+
+            if (ix < COUNT_CHUNKROW_TILES && iz < COUNT_CHUNKROW_TILES)
+            {
+                indices[indexCount + 0] = GetOnChunkIndexFor(ix, iz);
+                indices[indexCount + 1] = GetOnChunkIndexFor(ix, iz + 1);
+                indices[indexCount + 2] = GetOnChunkIndexFor(ix + 1, iz + 1);
+
+                indices[indexCount + 3] = GetOnChunkIndexFor(ix, iz);
+                indices[indexCount + 4] = GetOnChunkIndexFor(ix + 1, iz + 1);
+                indices[indexCount + 5] = GetOnChunkIndexFor(ix + 1, iz);
+
+                indexCount += 6;
+            }
+        }
+    }
+
+    glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
+    CHECK_GL();
+    glUnmapBuffer(GL_ARRAY_BUFFER);
     CHECK_GL();
 }
+class GroundChunkRenderLoadJob: public LoadJob
+{
+    private:
+        GroundRenderer *pRenderer;
+        ChunkID chunkID;
+    public:
+        GroundChunkRenderLoadJob(GroundRenderer *p, const ChunkID &id)
+        : pRenderer(p), chunkID(id)
+        {
+        }
+        void Run(void)
+        {
+            pRenderer->PrepareForChunk(chunkID);
+        }
+};
 void GroundRenderer::TellInit(Loader &loader)
 {
     pTexture = App::Instance().GetGLManager()->AllocTexture();
@@ -123,124 +205,25 @@ void GroundRenderer::TellInit(Loader &loader)
     pProgram = App::Instance().GetGLManager()->AllocShaderProgram();
     loader.Add(new ShaderLoadJob(*pProgram, groundVertexShaderSrc, groundFragmentShaderSrc, attributes));
 
-    pVertexBuffer = App::Instance().GetGLManager()->AllocBuffer();
-    pIndexBuffer = App::Instance().GetGLManager()->AllocBuffer();
-    SizeBuffers();
-}
-#define CLOSE_QUAD_SIZE 1.0f
-#define COUNT_CLOSE_QUADS 20
-float GroundRenderer::GetHorizontalCoord(const int i) const
-{
-    /*
-        Up to a given distance, the quads are same size.
-        Beyond that distance, the difference becomes exponential.
-     */
-
-    static const float closeDistance = CLOSE_QUAD_SIZE * COUNT_CLOSE_QUADS;
-
-    if (i < 0)
+    vec3 position(0.0f, 0.0f, 0.0f);
+    float x, z, dx, dz;
+    for (x = position.x - renderDistance; x < (position.x + renderDistance); x += CHUNK_SIZE)
     {
-        if (i > -COUNT_CLOSE_QUADS)
-            return CLOSE_QUAD_SIZE * i;
-        else
-            return -closeDistance - exp(-(i + COUNT_CLOSE_QUADS) * log(maxDist - closeDistance) / (subdiv - COUNT_CLOSE_QUADS));
-    }
-    else if (i == 0)
-        return 0.0f;
-    else  // i > 0
-    {
-        if (i < COUNT_CLOSE_QUADS)
-            return CLOSE_QUAD_SIZE * i;
-        else
-            return closeDistance + exp((i - COUNT_CLOSE_QUADS) * log(maxDist - closeDistance) / (subdiv - COUNT_CLOSE_QUADS));
-    }
-}
-size_t GroundRenderer::GetIndexFor(const int ix, const int iz) const
-{
-    int n = GetPointsPerRow();
-
-    return (subdiv + ix) * n + (subdiv + iz);
-}
-void GroundRenderer::Render(const mat4 &projection, const mat4 &view, const vec2 &center,
-                            const vec4 &horizonColor, const vec3 &lightDirection)
-{
-    size_t indexCount = 0;
-
-    float cx = floor(center.x / CLOSE_QUAD_SIZE) * CLOSE_QUAD_SIZE,
-          cz = floor(center.y / CLOSE_QUAD_SIZE) * CLOSE_QUAD_SIZE;
-
-    glBindBuffer(GL_ARRAY_BUFFER, *pVertexBuffer);
-    CHECK_GL();
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *pIndexBuffer);
-    CHECK_GL();
-
-    GroundRenderVertex *vertices = (GroundRenderVertex *)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-    CHECK_GL();
-    GroundRenderIndex *indices = (GroundRenderIndex *)glMapBuffer(GL_ELEMENT_ARRAY_BUFFER, GL_WRITE_ONLY);
-    CHECK_GL();
-
-    vec3 p_0, p10, p0_, p01, p00, t, b, n;
-    float x0, x_, x1, z0, z_, z1;
-    signed int ix, iz,
-               start = -subdiv, end = subdiv;
-
-    for (ix = start; ix <= end; ix++)
-    {
-        x0 = GetHorizontalCoord(ix) + cx;
-        x_ = GetHorizontalCoord(ix - 1) + cx;
-        x1 = GetHorizontalCoord(ix + 1) + cx;
-
-        for (iz = start; iz <= end; iz++)
+        for (z = position.z - renderDistance; z < (position.z + renderDistance); z += CHUNK_SIZE)
         {
-            z0 = GetHorizontalCoord(iz) + cz;
-            z_ = GetHorizontalCoord(iz - 1) + cz;
-            z1 = GetHorizontalCoord(iz + 1) + cz;
-
-            p00 = vec3(x0, mCalculator.GetVerticalCoord(vec2(x0, z0)), z0);
-            p_0 = vec3(x_, mCalculator.GetVerticalCoord(vec2(x_, z0)), z0);
-            p0_ = vec3(x0, mCalculator.GetVerticalCoord(vec2(x0, z_)), z_);
-            p10 = vec3(x1, mCalculator.GetVerticalCoord(vec2(x1, z0)), z0);
-            p01 = vec3(x0, mCalculator.GetVerticalCoord(vec2(x0, z1)), z1);
-
-            t = normalize(normalize(p00 - p_0) + normalize(p10 - p00));
-            b = normalize(normalize(p00 - p01) + normalize(p0_ - p00));
-            n = cross(t, b);
-
-            vertices[GetIndexFor(ix, iz)].position = p00;
-            vertices[GetIndexFor(ix, iz)].normal = n;
-
-            if (ix < end && iz < end)
+            dx = x - position.x;
+            dz = z - position.z;
+            if ((dx * dx + dz * dz) <= renderDistance * renderDistance)
             {
-                indices[indexCount + 0] = GetIndexFor(ix, iz);
-                indices[indexCount + 1] = GetIndexFor(ix, iz + 1);
-                indices[indexCount + 2] = GetIndexFor(ix + 1, iz + 1);
-
-                indices[indexCount + 3] = GetIndexFor(ix, iz);
-                indices[indexCount + 4] = GetIndexFor(ix + 1, iz + 1);
-                indices[indexCount + 5] = GetIndexFor(ix + 1, iz);
-
-                indexCount += 6;
+                ChunkID id = GetChunkID(x, z);
+                loader.Add(new GroundChunkRenderLoadJob(this, id));
             }
         }
     }
-
-    glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
-    CHECK_GL();
-    glUnmapBuffer(GL_ARRAY_BUFFER);
-    CHECK_GL();
-
-    // Position
-    glEnableVertexAttribArray(GROUND_POSITION_INDEX);
-    CHECK_GL();
-    glVertexAttribPointer(GROUND_POSITION_INDEX, 3, GL_FLOAT, GL_FALSE, sizeof(GroundRenderVertex), 0);
-    CHECK_GL();
-
-    // Normal
-    glEnableVertexAttribArray(GROUND_NORMAL_INDEX);
-    CHECK_GL();
-    glVertexAttribPointer(GROUND_NORMAL_INDEX, 3, GL_FLOAT, GL_FALSE, sizeof(GroundRenderVertex), (GLvoid *)sizeof(vec3));
-    CHECK_GL();
-
+}
+void GroundRenderer::Render(const mat4 &projection, const mat4 &view, const vec3 &center,
+                            const vec4 &horizonColor, const vec3 &lightDirection)
+{
     glUseProgram(*pProgram);
     CHECK_GL();
 
@@ -282,7 +265,7 @@ void GroundRenderer::Render(const mat4 &projection, const mat4 &view, const vec2
     glUniform3fv(lightDirectionLocation, 1, value_ptr(lightDirection));
     CHECK_GL();
 
-    glUniform1f(horizonDistanceLocation, maxDist);
+    glUniform1f(horizonDistanceLocation, renderDistance);
     CHECK_GL();
 
     glActiveTexture(GL_TEXTURE0);
@@ -300,8 +283,43 @@ void GroundRenderer::Render(const mat4 &projection, const mat4 &view, const vec2
     glEnable(GL_DEPTH_TEST);
     CHECK_GL();
 
-    glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, 0);
-    CHECK_GL();
+    float x, z, dx, dz;
+    for (x = center.x - renderDistance; x < (center.x + renderDistance); x += CHUNK_SIZE)
+    {
+        for (z = center.z - renderDistance; z < (center.z + renderDistance); z += CHUNK_SIZE)
+        {
+            dx = x - center.x;
+            dz = z - center.z;
+            if ((dx * dx + dz * dz) <= renderDistance * renderDistance)
+            {
+                ChunkID id = GetChunkID(x, z);
+
+                if (mChunkRenderObjs.find(id) == mChunkRenderObjs.end())
+                    PrepareForChunk(id);
+
+                glBindBuffer(GL_ARRAY_BUFFER, *(mChunkRenderObjs.at(id).pVertexBuffer));
+                CHECK_GL();
+
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *(mChunkRenderObjs.at(id).pIndexBuffer));
+                CHECK_GL();
+
+                // Position
+                glEnableVertexAttribArray(GROUND_POSITION_INDEX);
+                CHECK_GL();
+                glVertexAttribPointer(GROUND_POSITION_INDEX, 3, GL_FLOAT, GL_FALSE, sizeof(GroundRenderVertex), 0);
+                CHECK_GL();
+
+                // Normal
+                glEnableVertexAttribArray(GROUND_NORMAL_INDEX);
+                CHECK_GL();
+                glVertexAttribPointer(GROUND_NORMAL_INDEX, 3, GL_FLOAT, GL_FALSE, sizeof(GroundRenderVertex), (GLvoid *)sizeof(vec3));
+                CHECK_GL();
+
+                glDrawElements(GL_TRIANGLES, COUNT_GROUND_CHUNKRENDER_INDICES, GL_UNSIGNED_INT, 0);
+                CHECK_GL();
+            }
+        }
+    }
 
     glDisableVertexAttribArray(GROUND_POSITION_INDEX);
     CHECK_GL();
