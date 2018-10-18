@@ -61,11 +61,11 @@ void InGameScene::Update(void)
         position.y += MOVE_SPEED * dt;
     else if(mKeyInterpreter.IsKeyDown(KEYB_DUCK))
         position.y -= MOVE_SPEED * dt;
-    else if(mKeyInterpreter.IsKeyDown(KEYB_GOFORWARD))
+    if(mKeyInterpreter.IsKeyDown(KEYB_GOFORWARD))
         position += MOVE_SPEED * dt * rotate(vec3(0.0f, 0.0f, -1.0f), radians(yaw), vec3(0.0f, 1.0f, 0.0f));
     else if(mKeyInterpreter.IsKeyDown(KEYB_GOBACK))
         position += MOVE_SPEED * dt * rotate(vec3(0.0f, 0.0f, 1.0f), radians(yaw), vec3(0.0f, 1.0f, 0.0f));
-    else if(mKeyInterpreter.IsKeyDown(KEYB_GOLEFT))
+    if(mKeyInterpreter.IsKeyDown(KEYB_GOLEFT))
         position += MOVE_SPEED * dt * rotate(vec3(-1.0f, 0.0f, 0.0f), radians(yaw), vec3(0.0f, 1.0f, 0.0f));
     else if(mKeyInterpreter.IsKeyDown(KEYB_GORIGHT))
         position += MOVE_SPEED * dt * rotate(vec3(1.0f, 0.0f, 0.0f), radians(yaw), vec3(0.0f, 1.0f, 0.0f));
