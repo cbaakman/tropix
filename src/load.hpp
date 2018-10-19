@@ -9,6 +9,8 @@
 
 #include <boost/filesystem.hpp>
 
+#include "scene.hpp"
+
 
 class LoadJob
 {
@@ -57,6 +59,27 @@ class Initializable
 {
     public:
         virtual void TellInit(Loader &loader) = 0;
+};
+
+class InitializableScene: public Initializable, public Scene
+{
+};
+
+class LoadScene: public Scene
+{
+    private:
+        InitializableScene *pLoaded;
+
+        Loader mLoader;
+
+        std::thread mLoadThread;
+        static void LoadThreadFunc(LoadScene *);
+    public:
+        LoadScene(const size_t concurrency, InitializableScene *pLoaded);
+
+        void Start(void);
+        void Render(void);
+        void Update(void);
 };
 
 #endif  // LOAD_HPP

@@ -2,9 +2,8 @@
 #define SCENE_HPP
 
 #include "event.hpp"
-#include "load.hpp"
 
-class Scene: public EventListener, public Initializable
+class Scene: public EventListener
 {
     public:
         virtual void Start(void) {}

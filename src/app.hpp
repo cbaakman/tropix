@@ -22,7 +22,7 @@ class App: public EventListener
     private:
         boost::filesystem::path exePath;
 
-        std::mutex mtxConfig;
+        std::recursive_mutex mtxConfig;
         Config mConfig;
 
         SDL_Window *mMainWindow;
@@ -32,7 +32,7 @@ class App: public EventListener
 
         std::atomic<bool> running;
 
-        std::mutex mtxCurrentScene;
+        std::recursive_mutex mtxCurrentScene;
         Scene *pCurrentScene;
 
         GLManager mGLManager;

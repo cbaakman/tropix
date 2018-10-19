@@ -6,7 +6,7 @@
 #include <atomic>
 
 #include "config.hpp"
-#include "scene.hpp"
+#include "load.hpp"
 #include "alloc.hpp"
 #include "render/quad.hpp"
 #include "ground.hpp"
@@ -23,7 +23,7 @@ class KeyInterpreter
         bool IsKey(const KeyBinding, const SDL_Keycode) const;
 };
 
-class InGameScene: public Scene
+class InGameScene: public InitializableScene
 {
     private:
         KeyInterpreter mKeyInterpreter;

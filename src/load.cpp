@@ -1,6 +1,11 @@
 #include <iostream>
 
+#include <GL/glew.h>
+#include <GL/gl.h>
+
 #include "load.hpp"
+#include "error.hpp"
+#include "app.hpp"
 
 
 Loader::Loader(const size_t concurrency)
@@ -90,3 +95,37 @@ void Loader::ThrowAnyError(void)
     if (mErrors.size() > 0)
         std::rethrow_exception(mErrors.front());
 }
+LoadScene::LoadScene(const size_t concurrency, InitializableScene *p)
+: pLoaded(p), mLoader(concurrency)
+{
+    GLLock lockGL = App::Instance().GetGLLock();
+
+    pLoaded->TellInit(mLoader);
+}
+void LoadScene::LoadThreadFunc(LoadScene *p)
+{
+    App::Instance().GetGLManager()->GarbageCollect();
+
+    p->mLoader.Run();
+}
+void LoadScene::Start(void)
+{
+    mLoadThread = std::thread(LoadThreadFunc, this);
+}
+void LoadScene::Render(void)
+{
+    glClear(GL_COLOR_BUFFER_BIT);
+    CHECK_GL();
+}
+void LoadScene::Update(void)
+{
+    LoadStats stats;
+    mLoader.GetStats(stats);
+
+    if (stats.countJobsRemain <= 0)
+    {
+        mLoadThread.join();
+        App::Instance().SwitchScene(pLoaded);
+    }
+}
+

@@ -183,21 +183,10 @@ void App::Run(void)
     Config config;
     GetConfig(config);
 
-    InGameScene startScene(config);
+    InGameScene gameScene(config);
+    LoadScene loadScene(config.loadConcurrency, &gameScene);
 
-    // Load resources.
-    Loader loader(config.loadConcurrency);
-    {
-        GLLock lockGL = GetGLLock();
-
-        startScene.TellInit(loader);
-
-        glClear(GL_COLOR_BUFFER_BIT);
-        SDL_GL_SwapWindow(mMainWindow);
-    }
-    loader.Run();
-
-    SwitchScene(&startScene);
+    SwitchScene(&loadScene);
 
     running = true;
     while (running)
