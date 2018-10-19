@@ -46,6 +46,41 @@ bool KeyInterpreter::IsKey(const KeyBinding kb, const SDL_Keycode kc) const
 
     return false;
 }
+void InGameScene::Start(void)
+{
+    running = true;
+
+    size_t i;
+    Config config;
+    App::Instance().GetConfig(config);
+
+    countChunkLoadThreads = config.loadConcurrency;
+    mChunkLoadThreads = new std::thread[countChunkLoadThreads];
+    for (i = 0; i < countChunkLoadThreads; i++)
+        mChunkLoadThreads[i] = std::thread(ChunkLoadThreadFunc, this);
+}
+void InGameScene::Stop(void)
+{
+    running = false;
+
+    size_t i;
+    for (i = 0; i < countChunkLoadThreads; i++)
+        mChunkLoadThreads[i].join();
+    delete[] mChunkLoadThreads;
+}
+void InGameScene::ChunkLoadThreadFunc(InGameScene *p)
+{
+    vec3 center;
+    while (p->running)
+    {
+        {
+            std::scoped_lock lock(p->mtxPlayer);
+            center = p->position;
+        }
+
+        p->mGroundRenderer.UpdateBuffers(center);
+    }
+}
 #define MOVE_SPEED 5.0f
 void InGameScene::Update(void)
 {
@@ -56,15 +91,18 @@ void InGameScene::Update(void)
 
     dayCycle = fmod(dayCycle + (double)dt / DAYPERIOD, 1.0);
 
+    std::scoped_lock lock(mtxPlayer);
 
     if (mKeyInterpreter.IsKeyDown(KEYB_JUMP))
-        position.y += MOVE_SPEED * dt;
+        position += vec3(0.0f, 1.0f, 0.0f) * MOVE_SPEED * dt;
     else if(mKeyInterpreter.IsKeyDown(KEYB_DUCK))
-        position.y -= MOVE_SPEED * dt;
+        position -= vec3(0.0f, 1.0f, 0.0f) * MOVE_SPEED * dt;
+
     if(mKeyInterpreter.IsKeyDown(KEYB_GOFORWARD))
         position += MOVE_SPEED * dt * rotate(vec3(0.0f, 0.0f, -1.0f), radians(yaw), vec3(0.0f, 1.0f, 0.0f));
     else if(mKeyInterpreter.IsKeyDown(KEYB_GOBACK))
         position += MOVE_SPEED * dt * rotate(vec3(0.0f, 0.0f, 1.0f), radians(yaw), vec3(0.0f, 1.0f, 0.0f));
+
     if(mKeyInterpreter.IsKeyDown(KEYB_GOLEFT))
         position += MOVE_SPEED * dt * rotate(vec3(-1.0f, 0.0f, 0.0f), radians(yaw), vec3(0.0f, 1.0f, 0.0f));
     else if(mKeyInterpreter.IsKeyDown(KEYB_GORIGHT))
@@ -90,6 +128,8 @@ void InGameScene::Render(void)
     glClear(GL_DEPTH_BUFFER_BIT);
     CHECK_GL();
 
+    std::scoped_lock lock(mtxPlayer);
+
     size_t w, h;
     App::Instance().GetScreenDimensions(w, h);
     proj = perspectiveFov(45.0f, (GLfloat)w, (GLfloat)h, 0.1f, renderDistance);
@@ -106,6 +146,8 @@ void InGameScene::Render(void)
 #define MOUSE_SENSITIVITY 1.0f
 void InGameScene::OnMouseMove(const SDL_MouseMotionEvent &event)
 {
+    std::scoped_lock lock(mtxPlayer);
+
     yaw -= event.xrel * MOUSE_SENSITIVITY;
     pitch -= event.yrel * MOUSE_SENSITIVITY;
 

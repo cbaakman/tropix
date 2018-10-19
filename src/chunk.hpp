@@ -2,6 +2,7 @@
 #define CHUNK_HPP
 
 #include <functional>
+#include <tuple>
 
 
 #define TILE_SIZE 1.0f
@@ -28,5 +29,6 @@ namespace std
 }
 
 ChunkID GetChunkID(const float x, const float z);
+std::tuple<float, float> GetChunkCenter(const ChunkID id);
 
 #endif  // CHUNK_HPP

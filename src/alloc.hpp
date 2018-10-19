@@ -43,7 +43,7 @@ class GLRef
         GLRef(const GLRef &);
         ~GLRef(void);
         void operator=(const GLRef &);
-        GLuint operator*(void);
+        GLuint operator*(void) const;
 
     friend class GLManager;
 };
@@ -81,7 +81,7 @@ class GLScoped
         GLScoped(const GLScoped &) = delete;
         void operator=(const GLScoped &) = delete;
     public:
-        GLuint operator*(void);
+        GLuint operator*(void) const;
 
         GLScoped(GLuint, GLDeleter);
         ~GLScoped(void);

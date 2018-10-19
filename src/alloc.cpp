@@ -28,10 +28,8 @@ GLRef::GLRef(GLObj *p): pObj(p)
 {
     Increment();
 }
-GLRef::GLRef(const GLRef &other)
+GLRef::GLRef(const GLRef &other): pObj(other.pObj)
 {
-    Decrement();
-    pObj = other.pObj;
     Increment();
 }
 GLRef::~GLRef(void)
@@ -44,7 +42,7 @@ void GLRef::operator=(const GLRef &other)
     pObj = other.pObj;
     Increment();
 }
-GLuint GLRef::operator*(void)
+GLuint GLRef::operator*(void) const
 {
     if (pObj != NULL)
         return pObj->handle;
@@ -103,7 +101,7 @@ GLRef GLManager::AllocBuffer(void)
 }
 void GLManager::GarbageCollect(void)
 {
-    std::list<GLObj>::iterator it = mObjs.begin();
+    auto it = mObjs.begin();
     while (it != mObjs.end())
     {
         if (it->refCount <= 0)
@@ -134,7 +132,7 @@ GLScoped::~GLScoped(void)
 {
     deleter(handle);
 }
-GLuint GLScoped::operator*(void)
+GLuint GLScoped::operator*(void) const
 {
     return handle;
 }

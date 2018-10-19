@@ -23,6 +23,11 @@ ChunkID GetChunkID(const float x, const float z)
 
     return id;
 }
+std::tuple<float, float> GetChunkCenter(const ChunkID id)
+{
+    return std::make_tuple((float(id.x) * 0.5f) * CHUNK_SIZE,
+                           (float(id.z) * 0.5f) * CHUNK_SIZE);
+}
 
 namespace std
 {

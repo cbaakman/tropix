@@ -2,6 +2,8 @@
 #define GAME_HPP
 
 #include <chrono>
+#include <thread>
+#include <atomic>
 
 #include "config.hpp"
 #include "scene.hpp"
@@ -27,6 +29,7 @@ class InGameScene: public Scene
         KeyInterpreter mKeyInterpreter;
         std::chrono::time_point<std::chrono::system_clock> prevTime;
 
+        std::recursive_mutex mtxPlayer;
         vec3 position;
         float yaw, pitch;
         GLfloat renderDistance;
@@ -34,11 +37,18 @@ class InGameScene: public Scene
         double dayCycle;
         GroundRenderer mGroundRenderer;
         SkyRenderer mSkyRenderer;
+
+        size_t countChunkLoadThreads;
+        static void ChunkLoadThreadFunc(InGameScene *);
+        std::atomic<bool> running;
+        std::thread *mChunkLoadThreads;
     public:
         InGameScene(const Config &config);
 
+        void Start(void);
         void Update(void);
         void Render(void);
+        void Stop(void);
 
         void TellInit(Loader &);
 

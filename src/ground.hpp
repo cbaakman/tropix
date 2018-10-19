@@ -36,6 +36,7 @@ class GroundRenderer: public Initializable
     private:
         GLfloat renderDistance;
 
+        std::recursive_mutex mtxChunkRenderObjs;
         std::unordered_map<ChunkID, GroundChunkRenderObj> mChunkRenderObjs;
 
         GLRef pProgram,
@@ -43,7 +44,7 @@ class GroundRenderer: public Initializable
 
         GroundGenerator mGenerator;
 
-        void PrepareForChunk(const ChunkID &);
+        void PrepareForChunk(const ChunkID);
     public:
         GroundRenderer(const WorldSeed, const GLfloat renderDistance);
 
@@ -51,6 +52,9 @@ class GroundRenderer: public Initializable
 
         void Render(const mat4 &projection, const mat4 &view, const vec3 &center,
                     const vec4 &horizonColor, const vec3 &lightDirection);
+
+        void UpdateBuffers(const vec3 &center);
+        bool HasBuffersFor(const ChunkID);
 
     friend class GroundChunkRenderLoadJob;
 };

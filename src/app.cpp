@@ -14,7 +14,7 @@ App &App::Instance(void)
 }
 App::App(void)
 : mMainGLContext(NULL), mMainWindow(NULL), running(false),
-  pCurrentScene(NULL), countLocksGL(0)
+  pCurrentScene(NULL), lockLevelGL(0)
 {
 }
 App::~App(void)
@@ -132,20 +132,22 @@ void App::GetScreenDimensions(size_t &width, size_t &height) const
 void App::LockGL(void)
 {
     mtxGL.lock();
-    countLocksGL++;
 
-    if (SDL_GL_MakeCurrent(mMainWindow, mMainGLContext) != 0)
+    if (lockLevelGL <= 0 && SDL_GL_MakeCurrent(mMainWindow, mMainGLContext) != 0)
     {
-        throw GLError("SDL_GL_MakeCurrent: %s", SDL_GetError());
+        mtxGL.unlock();
+        throw GLError("LockGL > SDL_GL_MakeCurrent: %s", SDL_GetError());
     }
+
+    lockLevelGL++;
 }
 void App::UnlockGL(void)
 {
-    countLocksGL--;
+    lockLevelGL--;
 
-    if (countLocksGL <= 0 && SDL_GL_MakeCurrent(NULL, NULL) != 0)
+    if (lockLevelGL <= 0 && SDL_GL_MakeCurrent(NULL, NULL) != 0)
     {
-        throw GLError("SDL_GL_MakeCurrent: %s", SDL_GetError());
+        throw GLError("UnlockGL > SDL_GL_MakeCurrent: %s", SDL_GetError());
     }
     mtxGL.unlock();
 }
@@ -161,6 +163,17 @@ GLLock App::GetGLLock(void)
 {
     return GLLock();
 }
+void App::SwitchScene(Scene *p)
+{
+    std::scoped_lock lock(mtxCurrentScene);
+
+    if (pCurrentScene != NULL)
+        pCurrentScene->Stop();
+
+    pCurrentScene = p;
+    if (pCurrentScene != NULL)
+        pCurrentScene->Start();
+}
 void App::Run(void)
 {
     SDL_Event event;
@@ -169,46 +182,44 @@ void App::Run(void)
 
     Config config;
     GetConfig(config);
-    {
-        std::scoped_lock lock(mtxCurrentScene);
-        pCurrentScene = new InGameScene(config);
-    }
+
+    InGameScene startScene(config);
 
     // Load resources.
     Loader loader(config.loadConcurrency);
-
     {
         GLLock lockGL = GetGLLock();
-        std::scoped_lock lock(mtxCurrentScene);
 
-        pCurrentScene->TellInit(loader);
+        startScene.TellInit(loader);
+
+        glClear(GL_COLOR_BUFFER_BIT);
+        SDL_GL_SwapWindow(mMainWindow);
     }
-
     loader.Run();
 
-    running = true;
+    SwitchScene(&startScene);
 
-    while (IsRunning())
+    running = true;
+    while (running)
     {
         while (SDL_PollEvent(&event))
             OnEvent(event);
 
         {
-            GLLock lockGL = GetGLLock();
+            std::scoped_lock lock(mtxCurrentScene);
+            pCurrentScene->Update();
 
             {
-                std::scoped_lock lock(mtxCurrentScene);
-                pCurrentScene->Update();
-                pCurrentScene->Render();
-            }
+                GLLock lockGL = GetGLLock();
 
-            SDL_GL_SwapWindow(mMainWindow);
+                pCurrentScene->Render();
+                SDL_GL_SwapWindow(mMainWindow);
+            }
         }
     }
+    SwitchScene(NULL);
 
-    mGLManager.GarbageCollect();
-    delete pCurrentScene;
-
+    mGLManager.DestroyAll();
     Free();
 }
 void App::OnEvent(const SDL_Event &event)

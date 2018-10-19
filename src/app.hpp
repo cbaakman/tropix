@@ -28,7 +28,7 @@ class App: public EventListener
         SDL_Window *mMainWindow;
         SDL_GLContext mMainGLContext;
         std::recursive_mutex mtxGL;
-        size_t countLocksGL;
+        size_t lockLevelGL;
 
         std::atomic<bool> running;
 
@@ -62,6 +62,8 @@ class App: public EventListener
         GLLock GetGLLock(void);  // scoped
         void LockGL(void);
         void UnlockGL(void);
+
+        void SwitchScene(Scene *);
 
         static App &Instance(void);
 
