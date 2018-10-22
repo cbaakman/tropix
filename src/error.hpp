@@ -54,6 +54,12 @@ class FormatError: public Error
         FormatError(const char *format, ...);
 };
 
+class RuntimeError: public Error
+{
+    public:
+        RuntimeError(const char *format, ...);
+};
+
 class GLError : public Error
 {
     public:

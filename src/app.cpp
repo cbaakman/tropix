@@ -19,20 +19,17 @@ App::App(void)
 }
 App::~App(void)
 {
-    Free();
-}
-void App::Free(void)
-{
-    if (mMainGLContext)
-        SDL_GL_DeleteContext(mMainGLContext);
-
-    if (mMainWindow)
-        SDL_DestroyWindow(mMainWindow);
-
-    SDL_Quit();
+    if (HasSystem())
+    {
+        mGLManager.DestroyAll();
+        SystemFree();
+    }
 }
 void App::GetConfig(Config &config)
 {
+    if (!boost::filesystem::exists(exePath))
+        throw IOError("No valid executable path is set!");
+
     std::scoped_lock lock(mtxConfig);
 
     config.loadConcurrency = 4;
@@ -57,12 +54,28 @@ boost::filesystem::path App::GetResourcePath(const std::string &location) const
 {
     return exePath.parent_path() / "resources" / location;
 }
-void App::Init(void)
+bool App::HasSystem(void)
+{
+    return mMainGLContext != NULL;
+}
+void App::SystemFree(void)
+{
+    if (mMainGLContext != NULL)
+        SDL_GL_DeleteContext(mMainGLContext);
+    mMainGLContext = NULL;
+
+    if (mMainWindow != NULL)
+        SDL_DestroyWindow(mMainWindow);
+    mMainWindow = NULL;
+
+    SDL_Quit();
+}
+void App::SystemInit(void)
 {
     Config config;
     GetConfig(config);
 
-    int error = SDL_Init(SDL_INIT_EVERYTHING);
+    int error = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
     if (error != 0)
     {
         throw InitError("Unable to initialize SDL: %s", SDL_GetError());
@@ -91,7 +104,7 @@ void App::Init(void)
                                    config.resolution.width,
                                    config.resolution.height,
                                    flags);
-    if (!mMainWindow)
+    if (mMainWindow == NULL)
     {
         throw InitError("SDL_CreateWindow failed: %s", SDL_GetError());
     }
@@ -102,7 +115,7 @@ void App::Init(void)
     }
 
     mMainGLContext = SDL_GL_CreateContext(mMainWindow);
-    if (!mMainGLContext)
+    if (mMainGLContext == NULL)
     {
         throw InitError("Failed to create GL context: %s", SDL_GetError());
     }
@@ -121,33 +134,31 @@ void App::Init(void)
     // Keep the context free until locked.
     SDL_GL_MakeCurrent(NULL, NULL);
 }
-void App::GetScreenDimensions(size_t &width, size_t &height) const
-{
-    int w, h;
-    SDL_GetWindowSize(mMainWindow, &w, &h);
-
-    width = w;
-    height = h;
-}
 void App::LockGL(void)
 {
+    if (mMainGLContext == NULL)
+        throw GLError("LockGL: There's no GL context!");
+
     mtxGL.lock();
 
     if (lockLevelGL <= 0 && SDL_GL_MakeCurrent(mMainWindow, mMainGLContext) != 0)
     {
         mtxGL.unlock();
-        throw GLError("LockGL > SDL_GL_MakeCurrent: %s", SDL_GetError());
+        throw GLError("LockGL: SDL_GL_MakeCurrent: %s", SDL_GetError());
     }
 
     lockLevelGL++;
 }
 void App::UnlockGL(void)
 {
+    if (mMainGLContext == NULL)
+        throw GLError("UnlockGL: There's no GL context!");
+
     lockLevelGL--;
 
     if (lockLevelGL <= 0 && SDL_GL_MakeCurrent(NULL, NULL) != 0)
     {
-        throw GLError("UnlockGL > SDL_GL_MakeCurrent: %s", SDL_GetError());
+        throw GLError("UnlockGL: SDL_GL_MakeCurrent: %s", SDL_GetError());
     }
     mtxGL.unlock();
 }
@@ -178,43 +189,43 @@ void App::Run(void)
 {
     SDL_Event event;
 
-    Init();
+    if (!HasSystem())
+        SystemInit();
 
-    Config config;
-    GetConfig(config);
-
-    InGameScene gameScene(config);
-    LoadScene loadScene(config.loadConcurrency, &gameScene);
-
-    SwitchScene(&loadScene);
-
-    running = true;
-    while (running)
+    // Scene scope.
     {
-        while (SDL_PollEvent(&event))
-            OnEvent(event);
+        InGameScene gameScene;
+        LoadScene loadScene(&gameScene);
 
+        SwitchScene(&loadScene);
+
+        running = true;
+        while (running)
         {
-            std::scoped_lock lock(mtxCurrentScene);
-            pCurrentScene->Update();
+            while (SDL_PollEvent(&event))
+                OnEvent(event);
 
+            // In this scope, we lock the current scene.
             {
-                GLLock lockGL = GetGLLock();
+                std::scoped_lock lock(mtxCurrentScene);
+                pCurrentScene->Update();
 
-                pCurrentScene->Render();
-                SDL_GL_SwapWindow(mMainWindow);
+                // In this scope, we lock the GL context for rendering.
+                {
+                    GLLock lockGL = GetGLLock();
+
+                    pCurrentScene->Render();
+                    SDL_GL_SwapWindow(mMainWindow);
+                }
             }
         }
-    }
-    SwitchScene(NULL);
 
-    mGLManager.DestroyAll();
-    Free();
+        // Let the current scene Know that it's ending.
+        SwitchScene(NULL);
+    }
 }
 void App::OnEvent(const SDL_Event &event)
 {
-    std::scoped_lock lock(mtxCurrentScene);
-
     if (event.type == SDL_QUIT)
         StopRunning();
 
@@ -222,13 +233,16 @@ void App::OnEvent(const SDL_Event &event)
         StopRunning();
 
     else if (pCurrentScene != NULL)
+    {
+        std::scoped_lock lock(mtxCurrentScene);
+
         pCurrentScene->OnEvent(event);
+    }
 }
 void App::StopRunning(void)
 {
     running = false;
 }
-
 bool App::IsRunning(void)
 {
     return running;

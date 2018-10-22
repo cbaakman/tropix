@@ -90,8 +90,8 @@ float GroundGenerator::GetVerticalCoord(const vec2 &p) const
 {
     return 10 * (mNoiseGenerator.Noise(p / 50.0f) + mNoiseGenerator.Noise(p / 250.0f));
 }
-GroundRenderer::GroundRenderer(const WorldSeed seed, const GLfloat renderDist)
-: mGenerator(seed), renderDistance(renderDist)
+GroundRenderer::GroundRenderer(const WorldSeed seed)
+: mGenerator(seed)
 {
 }
 #define COUNT_CHUNKROW_POINTS (COUNT_CHUNKROW_TILES + 1)
@@ -214,6 +214,13 @@ class GroundChunkRenderLoadJob: public LoadJob
             pRenderer->PrepareForChunk(chunkID);
         }
 };
+GLfloat GroundRenderer::GetRenderDistance(void)
+{
+    Config config;
+    App::Instance().GetConfig(config);
+
+    return config.render.distance;
+}
 void GroundRenderer::TellInit(Loader &loader)
 {
     pTexture = App::Instance().GetGLManager()->AllocTexture();
@@ -224,6 +231,8 @@ void GroundRenderer::TellInit(Loader &loader)
     attributes["normal"] = GROUND_NORMAL_INDEX;
     pProgram = App::Instance().GetGLManager()->AllocShaderProgram();
     loader.Add(new ShaderLoadJob(*pProgram, groundVertexShaderSrc, groundFragmentShaderSrc, attributes));
+
+    GLfloat renderDistance = GetRenderDistance();
 
     vec3 position(0.0f, 0.0f, 0.0f);
     float x, z;
@@ -249,6 +258,7 @@ void GroundRenderer::UpdateBuffers(const vec3 &center)
     int64_t r;
     int64_t chx, chz;
     ChunkID centerID = GetChunkID(center.x, center.z), id;
+    GLfloat renderDistance = GetRenderDistance();
 
     /* Fill in nearby chunks, closest get priority.
        After updating a single chunk, immediatly return so
@@ -324,6 +334,8 @@ void GroundRenderer::Render(const mat4 &projection, const mat4 &view, const vec3
           horizonColorLocation,
           lightDirectionLocation,
           horizonDistanceLocation;
+
+    GLfloat renderDistance = GetRenderDistance();
 
     projectionMatrixLocation = glGetUniformLocation(*pProgram, "projectionMatrix");
     CHECK_GL();

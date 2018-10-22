@@ -37,8 +37,9 @@ class App: public EventListener
 
         GLManager mGLManager;
 
-        void Init(void);
-        void Free(void);
+        bool HasSystem(void);
+        void SystemInit(void);
+        void SystemFree(void);
 
         void OnEvent(const SDL_Event &);
 
@@ -56,8 +57,6 @@ class App: public EventListener
 
         GLManager *GetGLManager(void);
         boost::filesystem::path GetResourcePath(const std::string &location) const;
-
-        void GetScreenDimensions(size_t &w, size_t &h) const;
 
         GLLock GetGLLock(void);  // scoped
         void LockGL(void);

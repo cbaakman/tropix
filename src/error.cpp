@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include "error.hpp"
 
 
@@ -6,6 +8,13 @@ const char *Error::what(void) const noexcept
     return buffer;
 }
 IOError::IOError(const char *format, ...)
+{
+    va_list pArgs;
+    va_start(pArgs, format);
+    vsnprintf(buffer, ERRORBUFFER_SIZE, format, pArgs);
+    va_end(pArgs);
+}
+RuntimeError::RuntimeError(const char *format, ...)
 {
     va_list pArgs;
     va_start(pArgs, format);

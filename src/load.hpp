@@ -10,6 +10,8 @@
 #include <boost/filesystem.hpp>
 
 #include "scene.hpp"
+#include "alloc.hpp"
+#include "concurrency.hpp"
 
 
 class LoadJob
@@ -35,8 +37,7 @@ class Loader
         size_t countJobsAtStart;
         std::mutex mtxStats;
 
-        size_t countWorkers;
-        std::thread *mWorkers;
+        ConcurrentManager mConcurrentManager;
 
         LoadJob *Take(void);
 
@@ -45,12 +46,13 @@ class Loader
 
         static void Work(Loader *);
     public:
-        Loader(const size_t concurrency);
+        Loader(void);
         ~Loader(void);
 
         void Add(LoadJob *);  // Job is deleted when done.
 
         void Run(void);
+        void Clear(void);  // Removes remaining jobs, stopping 'Run'.
 
         void GetStats(LoadStats &);
 };
@@ -68,18 +70,24 @@ class InitializableScene: public Initializable, public Scene
 class LoadScene: public Scene
 {
     private:
+        GLRef pProgram,
+              pBuffer;
+
         InitializableScene *pLoaded;
 
         Loader mLoader;
 
         std::thread mLoadThread;
         static void LoadThreadFunc(LoadScene *);
+        void InterruptLoading(void);
     public:
-        LoadScene(const size_t concurrency, InitializableScene *pLoaded);
+        LoadScene(InitializableScene *pLoaded);
+        ~LoadScene(void);
 
         void Start(void);
         void Render(void);
         void Update(void);
+        void Stop(void);
 };
 
 #endif  // LOAD_HPP

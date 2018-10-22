@@ -34,8 +34,6 @@ struct GroundChunkRenderObj
 class GroundRenderer: public Initializable
 {
     private:
-        GLfloat renderDistance;
-
         std::recursive_mutex mtxChunkRenderObjs;
         std::unordered_map<ChunkID, GroundChunkRenderObj> mChunkRenderObjs;
 
@@ -44,9 +42,11 @@ class GroundRenderer: public Initializable
 
         GroundGenerator mGenerator;
 
+        GLfloat GetRenderDistance(void);
+
         void PrepareForChunk(const ChunkID);
     public:
-        GroundRenderer(const WorldSeed, const GLfloat renderDistance);
+        GroundRenderer(const WorldSeed);
 
         void TellInit(Loader &loader);
 

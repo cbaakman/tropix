@@ -16,7 +16,7 @@ class SkyRenderer: Initializable
         GLRef pSkyVertexBuffer, pSkyIndexBuffer,
               pProgram;
     public:
-        SkyRenderer(const float maxDist, const size_t subdiv);
+        SkyRenderer(const size_t subdiv);
 
         void TellInit(Loader &);
 

@@ -1,5 +1,6 @@
 #include <iostream>
 #include <memory>
+#include <list>
 
 #include "shader.hpp"
 #include "app.hpp"
@@ -63,20 +64,18 @@ GLuint MakeShader(const std::string &source, const GLenum type)
 
     return shader;
 }
-
 void LinkShaders(const GLuint program,
-                 const GLuint vertexShader,
-                 const GLuint fragmentShader,
+                 const std::list<GLuint> &shaders,
                  const VertexAttributeMap &vertexAttribLocations)
 {
     GLint result;
     int logLength;
 
-    glAttachShader(program, vertexShader);
-    CHECK_GL();
-
-    glAttachShader(program, fragmentShader);
-    CHECK_GL();
+    for (GLuint shader : shaders)
+    {
+        glAttachShader(program, shader);
+        CHECK_GL();
+    }
 
     for (const auto &pair : vertexAttribLocations)
     {
@@ -100,8 +99,28 @@ void LinkShaders(const GLuint program,
         glGetProgramInfoLog(program, logLength, NULL, errorString.get());
         CHECK_GL();
 
-        throw ShaderError("error while linking shader: %s", errorString.get());
+        throw ShaderError("error while linking shaders: %s", errorString.get());
     }
+}
+void LinkShaders(const GLuint program,
+                 const GLuint vertexShader,
+                 const GLuint fragmentShader, const VertexAttributeMap &attributes)
+{
+    std::list<GLuint> shaders;
+    shaders.push_back(vertexShader);
+    shaders.push_back(fragmentShader);
+    LinkShaders(program, shaders, attributes);
+}
+void LinkShaders(const GLuint program,
+                 const GLuint vertexShader,
+                 const GLuint geometryShader,
+                 const GLuint fragmentShader, const VertexAttributeMap &attributes)
+{
+    std::list<GLuint> shaders;
+    shaders.push_back(vertexShader);
+    shaders.push_back(geometryShader);
+    shaders.push_back(fragmentShader);
+    LinkShaders(program, shaders, attributes);
 }
 
 ShaderError::ShaderError(const char *format, ...)
@@ -116,7 +135,15 @@ ShaderLoadJob::ShaderLoadJob(GLuint prg,
                              const std::string &vSrc,
                              const std::string &fSrc,
                              const VertexAttributeMap &attrs)
-: program(prg), vertexSrc(vSrc), fragmentSrc(fSrc), attributes(attrs)
+: program(prg), vertexSrc(vSrc), geometrySrc(""), fragmentSrc(fSrc), attributes(attrs)
+{
+}
+ShaderLoadJob::ShaderLoadJob(GLuint prg,
+                             const std::string &vSrc,
+                             const std::string &gSrc,
+                             const std::string &fSrc,
+                             const VertexAttributeMap &attrs)
+: program(prg), vertexSrc(vSrc), geometrySrc(gSrc), fragmentSrc(fSrc), attributes(attrs)
 {
 }
 void DeleteShader(GLuint shader)
@@ -128,8 +155,21 @@ void ShaderLoadJob::Run(void)
 {
     GLLock scopedLock = App::Instance().GetGLLock();
 
-    GLScoped scopedVertexShader(MakeShader(vertexSrc, GL_VERTEX_SHADER), DeleteShader),
-             scopedFragmentShader(MakeShader(fragmentSrc, GL_FRAGMENT_SHADER), DeleteShader);
+    if (geometrySrc.length() > 0)
+    {
+        GLScoped scopedVertexShader(MakeShader(vertexSrc, GL_VERTEX_SHADER), DeleteShader),
+                 scopedGeometryShader(MakeShader(geometrySrc, GL_GEOMETRY_SHADER), DeleteShader),
+                 scopedFragmentShader(MakeShader(fragmentSrc, GL_FRAGMENT_SHADER), DeleteShader);
 
-    LinkShaders(program, *scopedVertexShader, *scopedFragmentShader, attributes);
+        LinkShaders(program, *scopedVertexShader,
+                             *scopedGeometryShader,
+                             *scopedFragmentShader, attributes);
+    }
+    else
+    {
+        GLScoped scopedVertexShader(MakeShader(vertexSrc, GL_VERTEX_SHADER), DeleteShader),
+                 scopedFragmentShader(MakeShader(fragmentSrc, GL_FRAGMENT_SHADER), DeleteShader);
+
+        LinkShaders(program, *scopedVertexShader, *scopedFragmentShader, attributes);
+    }
 }

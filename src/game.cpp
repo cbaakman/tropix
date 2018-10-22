@@ -11,67 +11,66 @@
 
 #define DAYPERIOD 5.0
 
-InGameScene::InGameScene(const Config &config)
-: mGroundRenderer(483417628069, config.render.distance),
-  mSkyRenderer(config.render.distance, 20),
+InGameScene::InGameScene(void)
+: mGroundRenderer(483417628069),
+  mSkyRenderer(20),
   yaw(0.0f), pitch(0.0f), position(0.0f, 2.0f, 0.0f),
-  renderDistance(config.render.distance),
-  prevTime(std::chrono::system_clock::now())
+  prevTime(std::chrono::system_clock::now()),
+  loadChunks(false)
 {
-    mKeyInterpreter.Set(config.controls);
+}
+InGameScene::~InGameScene(void)
+{
+    loadChunks = false;
+    mChunkConcurrentManager.JoinAll();
 }
 void InGameScene::TellInit(Loader &loader)
 {
     mSkyRenderer.TellInit(loader);
     mGroundRenderer.TellInit(loader);
 }
-void KeyInterpreter::Set(const Controls &cs)
+SDL_Keycode KeyInterpreter::GetConfigKeyCode(const KeyBinding binding) const
 {
-    controls = cs;
+    Config config;
+    App::Instance().GetConfig(config);
+
+    if (config.controls.find(binding) != config.controls.end())
+        return config.controls.at(binding);
+    else
+        return NULL;
 }
 bool KeyInterpreter::IsKeyDown(const KeyBinding kb) const
 {
-    if (controls.find(kb) == controls.end())
+    SDL_Keycode kc = GetConfigKeyCode(kb);
+    if (kc == NULL)
         return false;
 
-    SDL_Scancode sc = SDL_GetScancodeFromKey(controls.at(kb));
+    SDL_Scancode sc = SDL_GetScancodeFromKey(kc);
     const Uint8 *state = SDL_GetKeyboardState(NULL);
 
     return state[sc] != NULL;
 }
 bool KeyInterpreter::IsKey(const KeyBinding kb, const SDL_Keycode kc) const
 {
-    if (controls.find(kb) != controls.end())
-        return controls.at(kb) == kc;
-
-    return false;
+    return GetConfigKeyCode(kb) == kc;
 }
 void InGameScene::Start(void)
 {
-    running = true;
-
-    size_t i;
     Config config;
     App::Instance().GetConfig(config);
 
-    countChunkLoadThreads = config.loadConcurrency;
-    mChunkLoadThreads = new std::thread[countChunkLoadThreads];
-    for (i = 0; i < countChunkLoadThreads; i++)
-        mChunkLoadThreads[i] = std::thread(ChunkLoadThreadFunc, this);
+    loadChunks = true;
+    mChunkConcurrentManager.Start(config.loadConcurrency, ChunkLoadThreadFunc, this);
 }
 void InGameScene::Stop(void)
 {
-    running = false;
-
-    size_t i;
-    for (i = 0; i < countChunkLoadThreads; i++)
-        mChunkLoadThreads[i].join();
-    delete[] mChunkLoadThreads;
+    loadChunks = false;
+    mChunkConcurrentManager.JoinAll();
 }
 void InGameScene::ChunkLoadThreadFunc(InGameScene *p)
 {
     vec3 center;
-    while (p->running)
+    while (p->loadChunks)
     {
         {
             std::scoped_lock lock(p->mtxPlayer);
@@ -130,9 +129,12 @@ void InGameScene::Render(void)
 
     std::scoped_lock lock(mtxPlayer);
 
-    size_t w, h;
-    App::Instance().GetScreenDimensions(w, h);
-    proj = perspectiveFov(45.0f, (GLfloat)w, (GLfloat)h, 0.1f, renderDistance);
+    Config config;
+    App::Instance().GetConfig(config);
+
+    proj = perspectiveFov(45.0f,
+                          (GLfloat)config.resolution.width, (GLfloat)config.resolution.height,
+                          0.1f, config.render.distance);
 
     view = translate(view, position);
     view = rotate(view, radians(yaw), vec3(0.0f, 1.0f, 0.0f));

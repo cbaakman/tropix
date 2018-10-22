@@ -11,14 +11,14 @@
 #include "render/quad.hpp"
 #include "ground.hpp"
 #include "sky.hpp"
+#include "concurrency.hpp"
 
 
 class KeyInterpreter
 {
     private:
-        Controls controls;
+        SDL_Keycode GetConfigKeyCode(const KeyBinding) const;
     public:
-        void Set(const Controls &);
         bool IsKeyDown(const KeyBinding) const;
         bool IsKey(const KeyBinding, const SDL_Keycode) const;
 };
@@ -38,12 +38,12 @@ class InGameScene: public InitializableScene
         GroundRenderer mGroundRenderer;
         SkyRenderer mSkyRenderer;
 
-        size_t countChunkLoadThreads;
+        ConcurrentManager mChunkConcurrentManager;
         static void ChunkLoadThreadFunc(InGameScene *);
-        std::atomic<bool> running;
-        std::thread *mChunkLoadThreads;
+        std::atomic<bool> loadChunks;
     public:
-        InGameScene(const Config &config);
+        InGameScene(void);
+        ~InGameScene(void);
 
         void Start(void);
         void Update(void);

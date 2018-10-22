@@ -16,12 +16,12 @@ uniform mat4 projectionMatrix;
 
 in vec3 position;
 
-out vec3 pos;
+out vec3 onSpherePosition;
 
 void main()
 {
     gl_Position = projectionMatrix * viewMatrix * vec4(position, 1.0);
-    pos = position;
+    onSpherePosition = position;
 }
 )shader",
 
@@ -29,17 +29,17 @@ skyFragmentShaderSrc[] = R"shader(
 #version 150
 
 uniform float heightAboveHorizon;
-uniform float radius;
+uniform float horizonDistance;
 uniform vec4 skyColor;
 uniform vec4 horizonColor;
 
-in vec3 pos;
+in vec3 onSpherePosition;
 
 out vec4 fragColor;
 
 void main()
 {
-    float f = clamp((pos.y + heightAboveHorizon) / radius, 0.0, 1.0);
+    float f = clamp(onSpherePosition.y + heightAboveHorizon / horizonDistance, 0.0, 1.0);
     f = sqrt(f);
     fragColor = (1.0 - f) * horizonColor + f * skyColor;
 }
@@ -150,9 +150,8 @@ void SetSkySphere(const GLuint vertexBuffer, const GLuint indexBuffer,
     CHECK_GL();
 }
 
-SkyRenderer::SkyRenderer(const float maxDist, const size_t subdiv)
-: radius(maxDist),
-  countLattitudes(subdiv / 2),  // north pole excluded
+SkyRenderer::SkyRenderer(const size_t subdiv)
+: countLattitudes(subdiv / 2),  // north pole excluded
   countLongitudes(subdiv)  // begin == end
 {
 }
@@ -161,7 +160,7 @@ void SkyRenderer::TellInit(Loader &loader)
 {
     pSkyVertexBuffer = App::Instance().GetGLManager()->AllocBuffer();
     pSkyIndexBuffer = App::Instance().GetGLManager()->AllocBuffer();
-    SetSkySphere(*pSkyVertexBuffer, *pSkyIndexBuffer, radius, countLattitudes, countLongitudes);
+    SetSkySphere(*pSkyVertexBuffer, *pSkyIndexBuffer, 1.0f, countLattitudes, countLongitudes);
 
     VertexAttributeMap attributes;
     attributes["position"] = SKY_POSITION_INDEX;
@@ -173,6 +172,9 @@ void SkyRenderer::Render(const mat4 &projection, const mat4 &view,
                          const float heightAboveHorizon,
                          const vec4 &horizonColor, const vec4 &skyColor)
 {
+    Config config;
+    App::Instance().GetConfig(config);
+
     glDisable(GL_DEPTH_TEST);
     CHECK_GL();
 
@@ -199,7 +201,7 @@ void SkyRenderer::Render(const mat4 &projection, const mat4 &view,
     GLint projectionMatrixLocation,
           viewMatrixLocation,
           heightAboveHorizonLocation,
-          radiusLocation,
+          horizonDistanceLocation,
           horizonColorLocation,
           skyColorLocation;
 
@@ -215,9 +217,9 @@ void SkyRenderer::Render(const mat4 &projection, const mat4 &view,
     CHECK_GL();
     CHECK_UNIFORM_LOCATION(heightAboveHorizonLocation);
 
-    radiusLocation = glGetUniformLocation(*pProgram, "radius");
+    horizonDistanceLocation = glGetUniformLocation(*pProgram, "horizonDistance");
     CHECK_GL();
-    CHECK_UNIFORM_LOCATION(radiusLocation);
+    CHECK_UNIFORM_LOCATION(horizonDistanceLocation);
 
     horizonColorLocation = glGetUniformLocation(*pProgram, "horizonColor");
     CHECK_GL();
@@ -234,7 +236,7 @@ void SkyRenderer::Render(const mat4 &projection, const mat4 &view,
     glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, value_ptr(t));
     CHECK_GL();
 
-    glUniform1f(radiusLocation, radius);
+    glUniform1f(horizonDistanceLocation, config.render.distance);
     CHECK_GL();
 
     glUniform1f(heightAboveHorizonLocation, heightAboveHorizon);
