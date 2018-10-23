@@ -11,7 +11,7 @@ all: bin/tropix bin/resources/tiki.svg bin/resources/textures/sand.png bin/resou
 clean:
 	rm -rf bin/tropix obj/* core
 
-MODULES = app error event load game alloc shader texture ground sky noise chunk
+MODULES = app error event load game alloc shader texture ground sky noise chunk text
 
 bin/tropix: $(MODULES:%=obj/%.o)
 	mkdir -p $(@D)

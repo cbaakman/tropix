@@ -2,6 +2,8 @@
 #define CONCURRENCY_HPP
 
 #include <thread>
+#include <mutex>
+#include <atomic>
 #include <list>
 
 #include "error.hpp"

@@ -21,6 +21,7 @@ App::~App(void)
 {
     if (HasSystem())
     {
+        mFontManager.DestroyAll();
         mGLManager.DestroyAll();
         SystemFree();
     }
@@ -49,6 +50,10 @@ void App::GetConfig(Config &config)
 GLManager *App::GetGLManager(void)
 {
     return &mGLManager;
+}
+FontManager *App::GetFontManager(void)
+{
+    return &mFontManager;
 }
 boost::filesystem::path App::GetResourcePath(const std::string &location) const
 {
@@ -191,6 +196,8 @@ void App::Run(void)
 
     if (!HasSystem())
         SystemInit();
+
+    mFontManager.InitAll(GetResourcePath("tiki.svg"));
 
     // Scene scope.
     {

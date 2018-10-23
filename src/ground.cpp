@@ -103,7 +103,7 @@ size_t GetOnChunkIndexFor(const size_t ix, const size_t iz)
 #define COUNT_GROUND_CHUNKRENDER_VERTICES (COUNT_CHUNKROW_POINTS * COUNT_CHUNKROW_POINTS)
 #define GROUND_VERTEXBUFFER_SIZE (COUNT_GROUND_CHUNKRENDER_VERTICES * sizeof(GroundRenderVertex))
 #define GROUND_INDEXBUFFER_SIZE (COUNT_GROUND_CHUNKRENDER_INDICES * sizeof(GroundRenderIndex))
-void GroundRenderer::PrepareForChunk(const ChunkID id)
+void GroundRenderer::PrepareFor(const ChunkID id)
 {
     GroundRenderVertex *vertices;
     GroundRenderIndex *indices;
@@ -112,15 +112,18 @@ void GroundRenderer::PrepareForChunk(const ChunkID id)
     {
         GLLock scopedLock = App::Instance().GetGLLock();
 
-        obj.pVertexBuffer = App::Instance().GetGLManager()->AllocBuffer();
-        obj.pIndexBuffer = App::Instance().GetGLManager()->AllocBuffer();
+        glGenBuffers(1, &(obj.mVertexBuffer));
+        CHECK_GL();
 
-        glBindBuffer(GL_ARRAY_BUFFER, *(obj.pVertexBuffer));
+        glGenBuffers(1, &(obj.mIndexBuffer));
+        CHECK_GL();
+
+        glBindBuffer(GL_ARRAY_BUFFER, obj.mVertexBuffer);
         CHECK_GL();
         glBufferData(GL_ARRAY_BUFFER, GROUND_VERTEXBUFFER_SIZE, NULL, GL_DYNAMIC_DRAW);
         CHECK_GL();
 
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *(obj.pIndexBuffer));
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.mIndexBuffer);
         CHECK_GL();
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, GROUND_INDEXBUFFER_SIZE, NULL, GL_DYNAMIC_DRAW);
         CHECK_GL();
@@ -183,12 +186,12 @@ void GroundRenderer::PrepareForChunk(const ChunkID id)
     {
         GLLock scopedLock = App::Instance().GetGLLock();
 
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *(obj.pIndexBuffer));
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.mIndexBuffer);
         CHECK_GL();
         glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
         CHECK_GL();
 
-        glBindBuffer(GL_ARRAY_BUFFER, *(obj.pVertexBuffer));
+        glBindBuffer(GL_ARRAY_BUFFER, obj.mVertexBuffer);
         CHECK_GL();
         glUnmapBuffer(GL_ARRAY_BUFFER);
         CHECK_GL();
@@ -199,22 +202,19 @@ void GroundRenderer::PrepareForChunk(const ChunkID id)
         mChunkRenderObjs.emplace(id, obj);
     }
 }
-class GroundChunkRenderLoadJob: public LoadJob
+void GroundRenderer::DestroyFor(const ChunkID id)
 {
-    private:
-        GroundRenderer *pRenderer;
-        ChunkID chunkID;
-    public:
-        GroundChunkRenderLoadJob(GroundRenderer *p, const ChunkID &id)
-        : pRenderer(p), chunkID(id)
-        {
-        }
-        void Run(void)
-        {
-            pRenderer->PrepareForChunk(chunkID);
-        }
-};
-GLfloat GroundRenderer::GetRenderDistance(void)
+    GLLock lock = App::Instance().GetGLLock();
+
+    glDeleteBuffers(1, &(mChunkRenderObjs.at(id).mVertexBuffer));
+    CHECK_GL();
+
+    glDeleteBuffers(1, &(mChunkRenderObjs.at(id).mVertexBuffer));
+    CHECK_GL();
+
+    mChunkRenderObjs.erase(id);
+}
+GLfloat GroundRenderer::GetWorkRadius(void) const
 {
     Config config;
     App::Instance().GetConfig(config);
@@ -231,97 +231,6 @@ void GroundRenderer::TellInit(Loader &loader)
     attributes["normal"] = GROUND_NORMAL_INDEX;
     pProgram = App::Instance().GetGLManager()->AllocShaderProgram();
     loader.Add(new ShaderLoadJob(*pProgram, groundVertexShaderSrc, groundFragmentShaderSrc, attributes));
-
-    GLfloat renderDistance = GetRenderDistance();
-
-    vec3 position(0.0f, 0.0f, 0.0f);
-    float x, z;
-    for (x = position.x - renderDistance; x < (position.x + renderDistance); x += CHUNK_SIZE)
-    {
-        for (z = position.z - renderDistance; z < (position.z + renderDistance); z += CHUNK_SIZE)
-        {
-            ChunkID id = GetChunkID(x, z);
-            loader.Add(new GroundChunkRenderLoadJob(this, id));
-        }
-    }
-}
-bool GroundRenderer::HasBuffersFor(const ChunkID id)
-{
-    std::scoped_lock lock(mtxChunkRenderObjs);
-
-    return mChunkRenderObjs.find(id) != mChunkRenderObjs.end();
-}
-void GroundRenderer::UpdateBuffers(const vec3 &center)
-{
-    float x, z, dx, dz;
-
-    int64_t r;
-    int64_t chx, chz;
-    ChunkID centerID = GetChunkID(center.x, center.z), id;
-    GLfloat renderDistance = GetRenderDistance();
-
-    /* Fill in nearby chunks, closest get priority.
-       After updating a single chunk, immediatly return so
-       that the center position can be reset.
-     */
-    for (r = 0; (r * CHUNK_SIZE) < renderDistance; r++)
-    {
-        for (chx = -r; chx < r; chx++)
-        {
-            id.x = centerID.x + chx;
-
-            id.z = centerID.z + r;
-            if (!HasBuffersFor(id))
-            {
-                PrepareForChunk(id);
-                return;
-            }
-            id.z = centerID.z - r;
-            if (!HasBuffersFor(id))
-            {
-                PrepareForChunk(id);
-                return;
-            }
-        }
-        for (chz = -r; chz < r; chz++)
-        {
-            id.z = centerID.z + chz;
-
-            id.x = centerID.x + r;
-            if (!HasBuffersFor(id))
-            {
-                PrepareForChunk(id);
-                return;
-            }
-            id.x = centerID.x - r;
-            if (!HasBuffersFor(id))
-            {
-                PrepareForChunk(id);
-                return;
-            }
-        }
-    }
-
-    {
-        std::scoped_lock lock(mtxChunkRenderObjs);
-
-        // Drop far away chunks.
-        auto it = mChunkRenderObjs.begin();
-        while (it != mChunkRenderObjs.end())
-        {
-            ChunkID id = it->first;
-            std::tie(x, z) = GetChunkCenter(id);
-
-            dx = abs(x - center.x) - CHUNK_SIZE;
-            dz = abs(z - center.z) - CHUNK_SIZE;
-            if ((dx * dx + dz * dz) > renderDistance * renderDistance)
-            {
-                it = mChunkRenderObjs.erase(it);
-            }
-            else
-                it++;
-        }
-    }
 }
 void GroundRenderer::Render(const mat4 &projection, const mat4 &view, const vec3 &center,
                             const vec4 &horizonColor, const vec3 &lightDirection)
@@ -335,7 +244,7 @@ void GroundRenderer::Render(const mat4 &projection, const mat4 &view, const vec3
           lightDirectionLocation,
           horizonDistanceLocation;
 
-    GLfloat renderDistance = GetRenderDistance();
+    GLfloat renderDistance = GetWorkRadius();
 
     projectionMatrixLocation = glGetUniformLocation(*pProgram, "projectionMatrix");
     CHECK_GL();
@@ -402,10 +311,10 @@ void GroundRenderer::Render(const mat4 &projection, const mat4 &view, const vec3
 
                 if (mChunkRenderObjs.find(id) != mChunkRenderObjs.end())
                 {
-                    glBindBuffer(GL_ARRAY_BUFFER, *(mChunkRenderObjs.at(id).pVertexBuffer));
+                    glBindBuffer(GL_ARRAY_BUFFER, mChunkRenderObjs.at(id).mVertexBuffer);
                     CHECK_GL();
 
-                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *(mChunkRenderObjs.at(id).pIndexBuffer));
+                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mChunkRenderObjs.at(id).mIndexBuffer);
                     CHECK_GL();
 
                     // Position

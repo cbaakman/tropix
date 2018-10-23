@@ -14,18 +14,35 @@
 InGameScene::InGameScene(void)
 : mGroundRenderer(483417628069),
   mSkyRenderer(20),
-  yaw(0.0f), pitch(0.0f), position(0.0f, 2.0f, 0.0f),
-  prevTime(std::chrono::system_clock::now()),
-  loadChunks(false)
+  prevTime(std::chrono::system_clock::now())
 {
+    mChunkManager.Add(&mGroundRenderer);
+    mChunkManager.Add(&mPlayer);
+
+    Config config;
+    App::Instance().GetConfig(config);
+
+    mTextRenderer.SetProjection(ortho(0.0f, (GLfloat)config.resolution.width,
+                                      0.0f, (GLfloat)config.resolution.height,
+                                      -1.0f, 1.0f));
+    mTextParams.startX = 10.0f;
+    mTextParams.startY = config.resolution.height - 30.0f;
+    mTextParams.maxWidth = FLT_MAX;
+    mTextParams.lineSpacing = 20.0f;
+    mTextParams.align = TextGL::TEXTALIGN_LEFT;
 }
 InGameScene::~InGameScene(void)
 {
-    loadChunks = false;
-    mChunkConcurrentManager.JoinAll();
+    mChunkManager.DestroyAll();
+}
+Player::Player(void)
+ :yaw(0.0f), pitch(0.0f), position(0.0f, 2.0f, 0.0f)
+{
 }
 void InGameScene::TellInit(Loader &loader)
 {
+    mTextRenderer.TellInit(loader);
+    mChunkManager.TellInit(loader);
     mSkyRenderer.TellInit(loader);
     mGroundRenderer.TellInit(loader);
 }
@@ -56,41 +73,29 @@ bool KeyInterpreter::IsKey(const KeyBinding kb, const SDL_Keycode kc) const
 }
 void InGameScene::Start(void)
 {
-    Config config;
-    App::Instance().GetConfig(config);
-
-    loadChunks = true;
-    mChunkConcurrentManager.Start(config.loadConcurrency, ChunkLoadThreadFunc, this);
+    mChunkManager.Start();
 }
 void InGameScene::Stop(void)
 {
-    loadChunks = false;
-    mChunkConcurrentManager.JoinAll();
+    mChunkManager.Stop();
 }
-void InGameScene::ChunkLoadThreadFunc(InGameScene *p)
-{
-    vec3 center;
-    while (p->loadChunks)
-    {
-        {
-            std::scoped_lock lock(p->mtxPlayer);
-            center = p->position;
-        }
-
-        p->mGroundRenderer.UpdateBuffers(center);
-    }
-}
-#define MOVE_SPEED 5.0f
+#define MOVE_SPEED 10.0f
 void InGameScene::Update(void)
 {
     std::chrono::time_point<std::chrono::system_clock> time = std::chrono::system_clock::now();
-    float dt = float(std::chrono::duration_cast<std::chrono::milliseconds>(time - prevTime).count()) / 1000;
+    dt = float(std::chrono::duration_cast<std::chrono::milliseconds>(time - prevTime).count()) / 1000;
     prevTime = time;
 
 
     dayCycle = fmod(dayCycle + (double)dt / DAYPERIOD, 1.0);
 
-    std::scoped_lock lock(mtxPlayer);
+    mPlayer.Update(dt);
+
+    mChunkManager.ThrowAnyError();
+}
+void Player::Update(const float dt)
+{
+    std::scoped_lock lock(mtxPosition);
 
     if (mKeyInterpreter.IsKeyDown(KEYB_JUMP))
         position += vec3(0.0f, 1.0f, 0.0f) * MOVE_SPEED * dt;
@@ -110,6 +115,7 @@ void InGameScene::Update(void)
 void InGameScene::Render(void)
 {
     mat4 view, proj;
+    vec3 position;
 
     double angle = 2 * pi<double>() * dayCycle,
            sAngle = sin(angle), cAngle = cos(angle),
@@ -127,8 +133,6 @@ void InGameScene::Render(void)
     glClear(GL_DEPTH_BUFFER_BIT);
     CHECK_GL();
 
-    std::scoped_lock lock(mtxPlayer);
-
     Config config;
     App::Instance().GetConfig(config);
 
@@ -136,19 +140,31 @@ void InGameScene::Render(void)
                           (GLfloat)config.resolution.width, (GLfloat)config.resolution.height,
                           0.1f, config.render.distance);
 
+    position = mPlayer.GetWorldPosition();
     view = translate(view, position);
-    view = rotate(view, radians(yaw), vec3(0.0f, 1.0f, 0.0f));
-    view = rotate(view, radians(pitch), vec3(1.0f, 0.0f, 0.0f));
+    view = rotate(view, radians(mPlayer.GetYaw()), vec3(0.0f, 1.0f, 0.0f));
+    view = rotate(view, radians(mPlayer.GetPitch()), vec3(1.0f, 0.0f, 0.0f));
     view = inverse(view);
 
     mSkyRenderer.Render(proj, view, position.y, horizonColor, skyColor);
 
     mGroundRenderer.Render(proj, view, position, horizonColor, lightDirection);
+
+    char text[256];
+    sprintf(text, "dt: %.3f, FPS: %.1f", dt, 1.0f / dt);
+    mTextRenderer.IterateText(App::Instance().GetFontManager()->GetFont(FONT_SMALLBLACK),
+                              (int8_t *)text, mTextParams);
+}
+void InGameScene::OnEvent(const SDL_Event &event)
+{
+    mPlayer.OnEvent(event);
+
+    EventListener::OnEvent(event);
 }
 #define MOUSE_SENSITIVITY 1.0f
-void InGameScene::OnMouseMove(const SDL_MouseMotionEvent &event)
+void Player::OnMouseMove(const SDL_MouseMotionEvent &event)
 {
-    std::scoped_lock lock(mtxPlayer);
+    std::scoped_lock lock(mtxPosition);
 
     yaw -= event.xrel * MOUSE_SENSITIVITY;
     pitch -= event.yrel * MOUSE_SENSITIVITY;
@@ -157,4 +173,22 @@ void InGameScene::OnMouseMove(const SDL_MouseMotionEvent &event)
         pitch = -90.0f;
     else if (pitch > 90.0f)
         pitch = 90.0f;
+}
+vec3 Player::GetWorldPosition(void) const
+{
+    std::scoped_lock lock(mtxPosition);
+
+    return position;
+}
+float Player::GetYaw(void) const
+{
+    std::scoped_lock lock(mtxPosition);
+
+    return yaw;
+}
+float Player::GetPitch(void) const
+{
+    std::scoped_lock lock(mtxPosition);
+
+    return pitch;
 }

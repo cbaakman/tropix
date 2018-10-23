@@ -27,11 +27,12 @@ class GroundGenerator
 
 struct GroundChunkRenderObj
 {
-    GLRef pVertexBuffer,
-          pIndexBuffer;
+    // Don't use GLRef here, because we want to release the buffers immediatly as the chunks are unloaded.
+    GLuint mVertexBuffer,
+           mIndexBuffer;
 };
 
-class GroundRenderer: public Initializable
+class GroundRenderer: public Initializable, public ChunkWorker
 {
     private:
         std::recursive_mutex mtxChunkRenderObjs;
@@ -41,10 +42,6 @@ class GroundRenderer: public Initializable
               pTexture;
 
         GroundGenerator mGenerator;
-
-        GLfloat GetRenderDistance(void);
-
-        void PrepareForChunk(const ChunkID);
     public:
         GroundRenderer(const WorldSeed);
 
@@ -53,8 +50,9 @@ class GroundRenderer: public Initializable
         void Render(const mat4 &projection, const mat4 &view, const vec3 &center,
                     const vec4 &horizonColor, const vec3 &lightDirection);
 
-        void UpdateBuffers(const vec3 &center);
-        bool HasBuffersFor(const ChunkID);
+        void PrepareFor(const ChunkID);
+        void DestroyFor(const ChunkID);
+        float GetWorkRadius(void) const;
 
     friend class GroundChunkRenderLoadJob;
 };

@@ -12,6 +12,7 @@
 #include "ground.hpp"
 #include "sky.hpp"
 #include "concurrency.hpp"
+#include "text.hpp"
 
 
 class KeyInterpreter
@@ -23,24 +24,43 @@ class KeyInterpreter
         bool IsKey(const KeyBinding, const SDL_Keycode) const;
 };
 
-class InGameScene: public InitializableScene
+
+class Player: public ChunkObserver, public EventListener
 {
     private:
         KeyInterpreter mKeyInterpreter;
-        std::chrono::time_point<std::chrono::system_clock> prevTime;
 
-        std::recursive_mutex mtxPlayer;
         vec3 position;
         float yaw, pitch;
-        GLfloat renderDistance;
+        mutable std::recursive_mutex mtxPosition;
+    public:
+        Player(void);
+
+        vec3 GetWorldPosition(void) const;
+        float GetYaw(void) const;
+        float GetPitch(void) const;
+
+        void Update(const float dt);
+
+        void OnMouseMove(const SDL_MouseMotionEvent &);
+};
+
+class InGameScene: public InitializableScene
+{
+    private:
+        std::chrono::time_point<std::chrono::system_clock> prevTime;
+
+        Player mPlayer;
 
         double dayCycle;
+        float dt;
+
+        TextGL::TextParams mTextParams;
+        TextRenderer mTextRenderer;
+
         GroundRenderer mGroundRenderer;
         SkyRenderer mSkyRenderer;
-
-        ConcurrentManager mChunkConcurrentManager;
-        static void ChunkLoadThreadFunc(InGameScene *);
-        std::atomic<bool> loadChunks;
+        ChunkManager mChunkManager;
     public:
         InGameScene(void);
         ~InGameScene(void);
@@ -52,7 +72,7 @@ class InGameScene: public InitializableScene
 
         void TellInit(Loader &);
 
-        void OnMouseMove(const SDL_MouseMotionEvent &);
+        void OnEvent(const SDL_Event &);
 };
 
 #endif  // GAME_HPP

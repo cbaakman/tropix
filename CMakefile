@@ -11,7 +11,7 @@ clean:
 
 
 LIBS = boost_system boost_filesystem text-gl xml-mesh png glew32 opengl32 mingw32 SDL2main SDL2
-MODULES = app error event load game alloc shader texture noise ground sky chunk
+MODULES = app error event load game alloc shader texture noise ground sky chunk text
 
 bin/tropix.exe: $(MODULES:%=obj/%.o)
 	if not exist $(@D) (mkdir $(@D))

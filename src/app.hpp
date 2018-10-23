@@ -13,6 +13,7 @@
 #include "event.hpp"
 #include "scene.hpp"
 #include "alloc.hpp"
+#include "text.hpp"
 
 
 class GLLock;
@@ -36,6 +37,7 @@ class App: public EventListener
         Scene *pCurrentScene;
 
         GLManager mGLManager;
+        FontManager mFontManager;
 
         bool HasSystem(void);
         void SystemInit(void);
@@ -56,6 +58,8 @@ class App: public EventListener
         void GetConfig(Config &);
 
         GLManager *GetGLManager(void);
+        FontManager *GetFontManager(void);
+
         boost::filesystem::path GetResourcePath(const std::string &location) const;
 
         GLLock GetGLLock(void);  // scoped
