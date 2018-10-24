@@ -105,34 +105,9 @@ size_t GetOnChunkIndexFor(const size_t ix, const size_t iz)
 #define GROUND_INDEXBUFFER_SIZE (COUNT_GROUND_CHUNKRENDER_INDICES * sizeof(GroundRenderIndex))
 void GroundRenderer::PrepareFor(const ChunkID id)
 {
-    GroundRenderVertex *vertices;
-    GroundRenderIndex *indices;
+    GroundRenderVertex vertices[COUNT_GROUND_CHUNKRENDER_VERTICES];
+    GroundRenderIndex indices[COUNT_GROUND_CHUNKRENDER_INDICES];
     GroundChunkRenderObj obj;
-
-    {
-        GLLock scopedLock = App::Instance().GetGLLock();
-
-        glGenBuffers(1, &(obj.mVertexBuffer));
-        CHECK_GL();
-
-        glGenBuffers(1, &(obj.mIndexBuffer));
-        CHECK_GL();
-
-        glBindBuffer(GL_ARRAY_BUFFER, obj.mVertexBuffer);
-        CHECK_GL();
-        glBufferData(GL_ARRAY_BUFFER, GROUND_VERTEXBUFFER_SIZE, NULL, GL_DYNAMIC_DRAW);
-        CHECK_GL();
-
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.mIndexBuffer);
-        CHECK_GL();
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, GROUND_INDEXBUFFER_SIZE, NULL, GL_DYNAMIC_DRAW);
-        CHECK_GL();
-
-        vertices = (GroundRenderVertex *)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-        CHECK_GL();
-        indices = (GroundRenderIndex *)glMapBuffer(GL_ELEMENT_ARRAY_BUFFER, GL_WRITE_ONLY);
-        CHECK_GL();
-    }
 
     float ox = (float(id.x) - 0.5f) * CHUNK_SIZE,
           oz = (float(id.z) - 0.5f) * CHUNK_SIZE,
@@ -186,14 +161,20 @@ void GroundRenderer::PrepareFor(const ChunkID id)
     {
         GLLock scopedLock = App::Instance().GetGLLock();
 
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.mIndexBuffer);
+        glGenBuffers(1, &(obj.mVertexBuffer));
         CHECK_GL();
-        glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
+
+        glGenBuffers(1, &(obj.mIndexBuffer));
         CHECK_GL();
 
         glBindBuffer(GL_ARRAY_BUFFER, obj.mVertexBuffer);
         CHECK_GL();
-        glUnmapBuffer(GL_ARRAY_BUFFER);
+        glBufferData(GL_ARRAY_BUFFER, GROUND_VERTEXBUFFER_SIZE, vertices, GL_DYNAMIC_DRAW);
+        CHECK_GL();
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.mIndexBuffer);
+        CHECK_GL();
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, GROUND_INDEXBUFFER_SIZE, indices, GL_DYNAMIC_DRAW);
         CHECK_GL();
     }
 
