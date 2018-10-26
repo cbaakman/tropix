@@ -150,7 +150,10 @@ void GroundRenderer::Set(const ChunkID id, GroundChunkRenderObj *p)
 
     if (mChunkRenderObjs.find(id) != mChunkRenderObjs.end())
     {
-        DestroyFor(id);
+        GroundChunkBufferDeleteJob deleteJob(mChunkRenderObjs.at(id));
+        deleteJob.Run();
+
+        mChunkRenderObjs.erase(id);
     }
 
     mChunkRenderObjs.emplace(id, p);
