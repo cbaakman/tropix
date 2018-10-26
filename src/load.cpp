@@ -59,7 +59,7 @@ void Loader::GetStats(LoadStats &stats)
 void Loader::Run(void)
 {
     {
-        std::scoped_lock(mtxStats);
+        std::scoped_lock(mtxStats, mtxQueue);
         countJobsAtStart = mQueue.size();
     }
 
@@ -98,6 +98,41 @@ void Loader::ThrowAnyError(void)
     std::scoped_lock(mtxQueue);
     if (mErrors.size() > 0)
         std::rethrow_exception(mErrors.front());
+}
+void BottleNeckQueue::Add(LoadJob *pJob)
+{
+    std::scoped_lock lock(mtxQueue);
+
+    mQueue.push_back(pJob);
+}
+void BottleNeckQueue::ConsumeAll(void)
+{
+    std::scoped_lock lock(mtxQueue);
+
+    while (mQueue.size() > 0)
+    {
+        LoadJob *pJob = mQueue.front();
+        mQueue.pop_front();
+
+        try
+        {
+            pJob->Run();
+        }
+        catch (...)
+        {
+            delete pJob;
+
+            std::rethrow_exception(std::current_exception());
+        }
+        delete pJob;
+    }
+}
+BottleNeckQueue::~BottleNeckQueue(void)
+{
+    for (LoadJob *pJob : mQueue)
+    {
+        delete pJob;
+    }
 }
 
 struct LoadVertex
@@ -193,8 +228,6 @@ void main()
 LoadScene::LoadScene(InitializableScene *p)
 : pLoaded(p)
 {
-    GLLock lockGL = App::Instance().GetGLLock();
-
     pLoaded->TellInit(mLoader);
 
     pProgram = App::Instance().GetGLManager()->AllocShaderProgram();

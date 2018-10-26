@@ -8,8 +8,8 @@
 #include "config.hpp"
 #include "load.hpp"
 #include "alloc.hpp"
-#include "render/quad.hpp"
 #include "ground.hpp"
+#include "water.hpp"
 #include "sky.hpp"
 #include "concurrency.hpp"
 #include "text.hpp"
@@ -53,11 +53,12 @@ class InGameScene: public InitializableScene
         Player mPlayer;
 
         double dayCycle;
-        float dt;
+        float t, dt;
 
         TextGL::TextParams mTextParams;
         TextRenderer mTextRenderer;
 
+        WaterRenderer mWaterRenderer;
         GroundRenderer mGroundRenderer;
         SkyRenderer mSkyRenderer;
         ChunkManager mChunkManager;

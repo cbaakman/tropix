@@ -165,7 +165,7 @@ void SkyRenderer::TellInit(Loader &loader)
     VertexAttributeMap attributes;
     attributes["position"] = SKY_POSITION_INDEX;
     pProgram = App::Instance().GetGLManager()->AllocShaderProgram();
-    loader.Add(new ShaderLoadJob(*pProgram, skyVertexShaderSrc, skyFragmentShaderSrc, attributes));
+    App::Instance().PushGL(new ShaderLoadJob(*pProgram, skyVertexShaderSrc, skyFragmentShaderSrc, attributes));
 }
 
 void SkyRenderer::Render(const mat4 &projection, const mat4 &view,

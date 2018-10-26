@@ -62,8 +62,6 @@ GLObj *GLManager::AddObj(GLDeleter d)
 }
 GLRef GLManager::AllocTexture(void)
 {
-    GLLock scopedLock = App::Instance().GetGLLock();
-
     GLObj *pObj = AddObj([](GLuint texture) { glDeleteTextures(1, &texture); CHECK_GL(); });
     glGenTextures(1, &(pObj->handle));
     CHECK_GL();
@@ -75,8 +73,6 @@ GLRef GLManager::AllocTexture(void)
 }
 GLRef GLManager::AllocShaderProgram(void)
 {
-    GLLock scopedLock = App::Instance().GetGLLock();
-
     GLObj *pObj = AddObj([](GLuint program) { glDeleteProgram(program); CHECK_GL(); });
     pObj->handle = glCreateProgram();
     CHECK_GL();
@@ -88,8 +84,6 @@ GLRef GLManager::AllocShaderProgram(void)
 }
 GLRef GLManager::AllocBuffer(void)
 {
-    GLLock scopedLock = App::Instance().GetGLLock();
-
     GLObj *pObj = AddObj([](GLuint buffer) { glDeleteBuffers(1, &buffer); CHECK_GL(); });
     glGenBuffers(1, &(pObj->handle));
     CHECK_GL();
@@ -106,8 +100,6 @@ void GLManager::GarbageCollect(void)
     {
         if (it->refCount <= 0)
         {
-            GLLock scopedLock = App::Instance().GetGLLock();
-
             it->deleter(it->handle);
             it = mObjs.erase(it);
         }
@@ -117,8 +109,6 @@ void GLManager::GarbageCollect(void)
 }
 void GLManager::DestroyAll(void)
 {
-    GLLock scopedLock = App::Instance().GetGLLock();
-
     for (GLObj &obj : mObjs)
     {
         obj.deleter(obj.handle);

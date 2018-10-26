@@ -30,6 +30,8 @@ private:
 public:
     PerlinNoiseGenerator2D(const WorldSeed seed);
 
+    void Reseed(const WorldSeed seed);
+
     float Noise(const vec2 &p) const;
 };
 
@@ -39,6 +41,8 @@ private:
     Permutations mPermutations;
 public:
     PerlinNoiseGenerator3D(const WorldSeed seed);
+
+    void Reseed(const WorldSeed seed);
 
     float Noise(const vec3 &p) const;
 };

@@ -53,20 +53,16 @@ void TextRenderer::TellInit(Loader &loader)
     pBuffer = App::Instance().GetGLManager()->AllocBuffer();
     pProgram = App::Instance().GetGLManager()->AllocShaderProgram();
 
-    {
-        GLLock scopedLock = App::Instance().GetGLLock();
+    glBindBuffer(GL_ARRAY_BUFFER, *pBuffer);
+    CHECK_GL();
 
-        glBindBuffer(GL_ARRAY_BUFFER, *pBuffer);
-        CHECK_GL();
-
-        glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(TextGL::GlyphVertex), NULL, GL_DYNAMIC_DRAW);
-        CHECK_GL();
-    }
+    glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(TextGL::GlyphVertex), NULL, GL_DYNAMIC_DRAW);
+    CHECK_GL();
 
     VertexAttributeMap attributes;
     attributes["position"] = GLYPHVERTEX_POSITION_INDEX;
     attributes["texCoords"] = GLYPHVERTEX_TEXCOORDS_INDEX;
-    loader.Add(new ShaderLoadJob(*pProgram, glyphVertexShaderSrc, glyphFragmentShaderSrc, attributes));
+    App::Instance().PushGL(new ShaderLoadJob(*pProgram, glyphVertexShaderSrc, glyphFragmentShaderSrc, attributes));
 }
 void TextRenderer::SetProjection(const mat4 &m)
 {
@@ -139,8 +135,6 @@ TextGL::GLTextureFont *FontManager::InitFont(const FontStyleChoice choice, const
 {
     if (mFonts.find(choice) == mFonts.end())
     {
-        GLLock scopedLock = App::Instance().GetGLLock();
-
         std::unique_ptr<TextGL::ImageFont, void (*)(TextGL::ImageFont *)> pImageFont(TextGL::MakeImageFont(mFontData, style), TextGL::DestroyImageFont);
 
         mFonts.emplace(choice, TextGL::MakeGLTextureFont(pImageFont.get()));
@@ -170,8 +164,6 @@ void FontManager::InitAll(const boost::filesystem::path &path)
 }
 void FontManager::DestroyAll(void)
 {
-    GLLock scopedLock = App::Instance().GetGLLock();
-
     for (auto &pair : mFonts)
         TextGL::DestroyGLTextureFont(pair.second);
 }

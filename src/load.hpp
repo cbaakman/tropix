@@ -63,6 +63,19 @@ class Initializable
         virtual void TellInit(Loader &loader) = 0;
 };
 
+class BottleNeckQueue
+{
+    private:
+        std::mutex mtxQueue;
+        std::list<LoadJob *> mQueue;
+    public:
+        ~BottleNeckQueue(void);
+
+        void Add(LoadJob *);
+
+        void ConsumeAll(void);
+};
+
 class InitializableScene: public Initializable, public Scene
 {
 };

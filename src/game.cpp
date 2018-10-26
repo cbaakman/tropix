@@ -12,9 +12,9 @@
 #define DAYPERIOD 5.0
 
 InGameScene::InGameScene(void)
-: mGroundRenderer(483417628069),
+: mChunkManager(483417628069),
   mSkyRenderer(20),
-  prevTime(std::chrono::system_clock::now())
+  prevTime(std::chrono::system_clock::now()), t(0.0f)
 {
     mChunkManager.Add(&mGroundRenderer);
     mChunkManager.Add(&mPlayer);
@@ -45,6 +45,7 @@ void InGameScene::TellInit(Loader &loader)
     mChunkManager.TellInit(loader);
     mSkyRenderer.TellInit(loader);
     mGroundRenderer.TellInit(loader);
+    mWaterRenderer.TellInit(loader);
 }
 SDL_Keycode KeyInterpreter::GetConfigKeyCode(const KeyBinding binding) const
 {
@@ -85,6 +86,7 @@ void InGameScene::Update(void)
     std::chrono::time_point<std::chrono::system_clock> time = std::chrono::system_clock::now();
     dt = float(std::chrono::duration_cast<std::chrono::milliseconds>(time - prevTime).count()) / 1000;
     prevTime = time;
+    t += dt;
 
 
     dayCycle = fmod(dayCycle + (double)dt / DAYPERIOD, 1.0);
@@ -95,22 +97,24 @@ void InGameScene::Update(void)
 }
 void Player::Update(const float dt)
 {
-    std::scoped_lock lock(mtxPosition);
+    {
+        std::scoped_lock lock(mtxPosition);
 
-    if (mKeyInterpreter.IsKeyDown(KEYB_JUMP))
-        position += vec3(0.0f, 1.0f, 0.0f) * MOVE_SPEED * dt;
-    else if(mKeyInterpreter.IsKeyDown(KEYB_DUCK))
-        position -= vec3(0.0f, 1.0f, 0.0f) * MOVE_SPEED * dt;
+        if (mKeyInterpreter.IsKeyDown(KEYB_JUMP))
+            position += vec3(0.0f, 1.0f, 0.0f) * MOVE_SPEED * dt;
+        else if(mKeyInterpreter.IsKeyDown(KEYB_DUCK))
+            position -= vec3(0.0f, 1.0f, 0.0f) * MOVE_SPEED * dt;
 
-    if(mKeyInterpreter.IsKeyDown(KEYB_GOFORWARD))
-        position += MOVE_SPEED * dt * rotate(vec3(0.0f, 0.0f, -1.0f), radians(yaw), vec3(0.0f, 1.0f, 0.0f));
-    else if(mKeyInterpreter.IsKeyDown(KEYB_GOBACK))
-        position += MOVE_SPEED * dt * rotate(vec3(0.0f, 0.0f, 1.0f), radians(yaw), vec3(0.0f, 1.0f, 0.0f));
+        if(mKeyInterpreter.IsKeyDown(KEYB_GOFORWARD))
+            position += MOVE_SPEED * dt * rotate(vec3(0.0f, 0.0f, -1.0f), radians(yaw), vec3(0.0f, 1.0f, 0.0f));
+        else if(mKeyInterpreter.IsKeyDown(KEYB_GOBACK))
+            position += MOVE_SPEED * dt * rotate(vec3(0.0f, 0.0f, 1.0f), radians(yaw), vec3(0.0f, 1.0f, 0.0f));
 
-    if(mKeyInterpreter.IsKeyDown(KEYB_GOLEFT))
-        position += MOVE_SPEED * dt * rotate(vec3(-1.0f, 0.0f, 0.0f), radians(yaw), vec3(0.0f, 1.0f, 0.0f));
-    else if(mKeyInterpreter.IsKeyDown(KEYB_GORIGHT))
-        position += MOVE_SPEED * dt * rotate(vec3(1.0f, 0.0f, 0.0f), radians(yaw), vec3(0.0f, 1.0f, 0.0f));
+        if(mKeyInterpreter.IsKeyDown(KEYB_GOLEFT))
+            position += MOVE_SPEED * dt * rotate(vec3(-1.0f, 0.0f, 0.0f), radians(yaw), vec3(0.0f, 1.0f, 0.0f));
+        else if(mKeyInterpreter.IsKeyDown(KEYB_GORIGHT))
+            position += MOVE_SPEED * dt * rotate(vec3(1.0f, 0.0f, 0.0f), radians(yaw), vec3(0.0f, 1.0f, 0.0f));
+    }
 }
 void InGameScene::Render(void)
 {
@@ -149,6 +153,8 @@ void InGameScene::Render(void)
     mSkyRenderer.Render(proj, view, position.y, horizonColor, skyColor);
 
     mGroundRenderer.Render(proj, view, position, horizonColor, lightDirection);
+
+    mWaterRenderer.Render(proj, view, position, lightDirection, t);
 
     char text[256];
     sprintf(text, "dt: %.3f, FPS: %.1f", dt, 1.0f / dt);

@@ -134,35 +134,45 @@ TextureError::TextureError(const char *format, ...)
     vsnprintf(buffer, ERRORBUFFER_SIZE, format, pArgs);
     va_end(pArgs);
 }
-void FillGLTexture(const PNGImage *pImage, const GLuint tex)
+class FillGLTextureJob: public LoadJob
 {
-    GLLock lock = App::Instance().GetGLLock();
+    private:
+        std::shared_ptr<const PNGImage> pImage;
+        GLuint tex;
+    public:
+        FillGLTextureJob(std::shared_ptr<const PNGImage> p, const GLuint texture)
+        :pImage(p), tex(texture)
+        {
+        }
 
-    png_uint_32 w, h;
-    pImage->GetDimensions(w, h);
+        void Run(void)
+        {
+            png_uint_32 w, h;
+            pImage->GetDimensions(w, h);
 
-    glBindTexture(GL_TEXTURE_2D, tex);
-    CHECK_GL();
+            glBindTexture(GL_TEXTURE_2D, tex);
+            CHECK_GL();
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    CHECK_GL();
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    CHECK_GL();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            CHECK_GL();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            CHECK_GL();
 
-    if (pImage->GetColorType() == PNG_COLOR_TYPE_RGB)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
-                     (GLsizei)w, (GLsizei)h, 0, GL_RGB,
-                     GL_UNSIGNED_BYTE, pImage->GetData());
+            if (pImage->GetColorType() == PNG_COLOR_TYPE_RGB)
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+                             (GLsizei)w, (GLsizei)h, 0, GL_RGB,
+                             GL_UNSIGNED_BYTE, pImage->GetData());
 
-    else if (pImage->GetColorType() == PNG_COLOR_TYPE_RGBA)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
-                     (GLsizei)w, (GLsizei)h, 0, GL_RGBA,
-                     GL_UNSIGNED_BYTE, pImage->GetData());
-    CHECK_GL();
+            else if (pImage->GetColorType() == PNG_COLOR_TYPE_RGBA)
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+                             (GLsizei)w, (GLsizei)h, 0, GL_RGBA,
+                             GL_UNSIGNED_BYTE, pImage->GetData());
+            CHECK_GL();
 
-    glGenerateMipmap(GL_TEXTURE_2D);
-    CHECK_GL();
-}
+            glGenerateMipmap(GL_TEXTURE_2D);
+            CHECK_GL();
+        }
+};
 PNGTextureLoadJob::PNGTextureLoadJob(const std::string &loc, const GLuint tex): location(loc), texture(tex)
 {
 }
@@ -177,9 +187,9 @@ void PNGTextureLoadJob::Run(void)
     if (!is.good())
         throw IOError("Error reading %s", path.string().c_str());
 
-    std::unique_ptr<PNGImage, std::function<void(PNGImage *)>> pImage(reader.ReadImage(is), [&reader](PNGImage *p) { reader.FreeImage(p); });
+    std::shared_ptr<PNGImage> pImage(reader.ReadImage(is), [&reader](PNGImage *p) { reader.FreeImage(p); });
 
     is.close();
 
-    FillGLTexture(pImage.get(), texture);
+    App::Instance().PushGL(new FillGLTextureJob(pImage, texture));
 }

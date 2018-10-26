@@ -77,6 +77,10 @@ PerlinNoiseGenerator2D::PerlinNoiseGenerator2D(const WorldSeed seed)
 {
     PerlinReseed(seed, mPermutations);
 }
+void PerlinNoiseGenerator2D::Reseed(const WorldSeed seed)
+{
+    PerlinReseed(seed, mPermutations);
+}
 float PerlinNoiseGenerator2D::Noise(const vec2 &p) const
 {
     const WorldSeed X = WorldSeed(floor(p.x)) & 0xff,
@@ -96,6 +100,10 @@ float PerlinNoiseGenerator2D::Noise(const vec2 &p) const
     return Lerp(fy, Lerp(fx, grad00, grad10), Lerp(fx, grad01, grad11));
 }
 PerlinNoiseGenerator3D::PerlinNoiseGenerator3D(const WorldSeed seed)
+{
+    PerlinReseed(seed, mPermutations);
+}
+void PerlinNoiseGenerator3D::Reseed(const WorldSeed seed)
 {
     PerlinReseed(seed, mPermutations);
 }

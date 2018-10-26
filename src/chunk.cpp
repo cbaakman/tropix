@@ -1,5 +1,7 @@
 #include <cmath>
 #include <iostream>
+#include <chrono>
+#include <thread>
 
 #include <boost/functional/hash.hpp>
 
@@ -62,6 +64,14 @@ ChunkRecord::ChunkRecord(void)
  :updating(false), inRange(false)
 {
 }
+ChunkManager::ChunkManager(const WorldSeed seed)
+: mSeed(seed)
+{
+}
+ChunkManager::~ChunkManager(void)
+{
+    Stop();
+}
 void ChunkManager::Start(void)
 {
     working = true;
@@ -69,13 +79,17 @@ void ChunkManager::Start(void)
     Config config;
     App::Instance().GetConfig(config);
 
-    mChunkWorkManager.Start(config.loadConcurrency, ChunkWorkerThreadFunc, this);
+    mChunkWorkManager.Start(max(1, int(config.loadConcurrency - 1)), ChunkWorkerThreadFunc, this);
+    mGarbageCollectThread = std::thread(ChunkGarbageCollectThreadFunc, this);
 }
 void ChunkManager::Stop(void)
 {
     working = false;
 
     mChunkWorkManager.JoinAll();
+
+    if (mGarbageCollectThread.joinable())
+        mGarbageCollectThread.join();
 
     ThrowAnyError();
 }
@@ -89,28 +103,36 @@ void ChunkManager::ChunkWorkerThreadFunc(ChunkManager *p)
         {
             std::scoped_lock lock(p->mtxLists);
 
-            p->GarbageCollect();
-
-            p->FindOneJob(id, pRecord);
-            if (pRecord == NULL)
+            if (!(p->FindOneJob(id, pRecord)))
                 continue;
 
             pRecord->mChunks[id].updating = true;
-            pRecord->mChunks[id].mtxChunk.lock();
         }
 
         try
         {
-            pRecord->pWorker->PrepareFor(id);
-
-            pRecord->mChunks[id].mtxChunk.unlock();
+            pRecord->pWorker->PrepareFor(id, p->mSeed);
         }
         catch (...)
         {
-            pRecord->mChunks[id].mtxChunk.unlock();
-
             p->PushError(std::current_exception());
         }
+    }
+}
+void ChunkManager::ChunkGarbageCollectThreadFunc(ChunkManager *p)
+{
+    while (p->working)
+    {
+        try
+        {
+            p->GarbageCollect();
+        }
+        catch (...)
+        {
+            p->PushError(std::current_exception());
+        }
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 }
 void ChunkManager::Add(ChunkWorker *p)
@@ -148,8 +170,6 @@ void ChunkManager::DestroyAll(void)
     {
         for (auto &pair : record.mChunks)
         {
-            std::scoped_lock lock(pair.second.mtxChunk);
-
             record.pWorker->DestroyFor(pair.first);
         }
 
@@ -158,6 +178,8 @@ void ChunkManager::DestroyAll(void)
 }
 void ChunkManager::GarbageCollect(void)
 {
+    std::scoped_lock lock(mtxLists);
+
     float radius, cx, cz, dx, dz;
     vec3 pos;
 
@@ -180,7 +202,9 @@ void ChunkManager::GarbageCollect(void)
                 dz = cz - pos.z;
 
                 if ((dx * dx + dz * dz) < radius * radius)
+                {
                     pair.second.inRange = true;
+                }
             }
         }
 
@@ -189,11 +213,7 @@ void ChunkManager::GarbageCollect(void)
         {
             if (!(it->second.inRange))
             {
-                {
-                    std::scoped_lock lock(it->second.mtxChunk);
-
-                    record.pWorker->DestroyFor(it->first);
-                }
+                record.pWorker->DestroyFor(it->first);
 
                 it = record.mChunks.erase(it);
             }
@@ -206,18 +226,17 @@ class ChunkPrepareJob: public LoadJob
 {
     private:
         ChunkID id;
+        WorldSeed seed;
         ChunkWorkRecord *pRecord;
     public:
-        ChunkPrepareJob(ChunkWorkRecord *p, const ChunkID cid)
-         :pRecord(p), id(cid)
+        ChunkPrepareJob(ChunkWorkRecord *p, const ChunkID cid, const WorldSeed s)
+         :pRecord(p), id(cid), seed(s)
         {
         }
 
         void Run(void)
         {
-            std::scoped_lock lock(pRecord->mChunks[id].mtxChunk);
-
-            pRecord->pWorker->PrepareFor(id);
+            pRecord->pWorker->PrepareFor(id, seed);
             pRecord->mChunks[id].updating = true;
         }
 };
@@ -238,16 +257,14 @@ void ChunkManager::TellInit(Loader &loader)
             {
                 for (z = pos.z - radius; z < (pos.z + radius); z += CHUNK_SIZE)
                 {
-                    loader.Add(new ChunkPrepareJob(&record, GetChunkID(x, z)));
+                    loader.Add(new ChunkPrepareJob(&record, GetChunkID(x, z), mSeed));
                 }
             }
         }
     }
 }
-void ChunkManager::FindOneJob(ChunkID &id, ChunkWorkRecord *&pRecord)
+bool ChunkManager::FindOneJob(ChunkID &id, ChunkWorkRecord *&pRecord)
 {
-    pRecord = NULL;
-
     float x, z, dx, dz, radius;
     vec3 pos;
 
@@ -280,13 +297,13 @@ void ChunkManager::FindOneJob(ChunkID &id, ChunkWorkRecord *&pRecord)
                     if (!Updating(id, &record))
                     {
                         pRecord = &record;
-                        return;
+                        return true;
                     }
                     id.z = centerID.z - r;
                     if (!Updating(id, &record))
                     {
                         pRecord = &record;
-                        return;
+                        return true;
                     }
                 }
                 for (chz = -r; chz <= r; chz++)
@@ -297,18 +314,20 @@ void ChunkManager::FindOneJob(ChunkID &id, ChunkWorkRecord *&pRecord)
                     if (!Updating(id, &record))
                     {
                         pRecord = &record;
-                        return;
+                        return true;
                     }
                     id.x = centerID.x - r;
                     if (!Updating(id, &record))
                     {
                         pRecord = &record;
-                        return;
+                        return true;
                     }
                 }
             }
         }
     }
+
+    return false;
 }
 bool ChunkManager::Updating(const ChunkID id, const ChunkWorkRecord *pRecord)
 {

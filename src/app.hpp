@@ -14,6 +14,7 @@
 #include "scene.hpp"
 #include "alloc.hpp"
 #include "text.hpp"
+#include "load.hpp"
 
 
 class GLLock;
@@ -28,8 +29,6 @@ class App: public EventListener
 
         SDL_Window *mMainWindow;
         SDL_GLContext mMainGLContext;
-        std::recursive_mutex mtxGL;
-        size_t lockLevelGL;
 
         std::atomic<bool> running;
 
@@ -37,6 +36,7 @@ class App: public EventListener
         Scene *pCurrentScene;
 
         GLManager mGLManager;
+        BottleNeckQueue mGLQueue;
         FontManager mFontManager;
 
         bool HasSystem(void);
@@ -62,9 +62,7 @@ class App: public EventListener
 
         boost::filesystem::path GetResourcePath(const std::string &location) const;
 
-        GLLock GetGLLock(void);  // scoped
-        void LockGL(void);
-        void UnlockGL(void);
+        void PushGL(LoadJob *);
 
         void SwitchScene(Scene *);
 

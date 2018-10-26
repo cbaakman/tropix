@@ -11,6 +11,7 @@ using namespace glm;
 
 #include "concurrency.hpp"
 #include "load.hpp"
+#include "noise.hpp"
 
 
 #define TILE_SIZE 1.0f
@@ -46,7 +47,7 @@ std::tuple<float, float> GetChunkCenter(const ChunkID id);
 class ChunkWorker
 {
     public:
-        virtual void PrepareFor(const ChunkID) = 0;
+        virtual void PrepareFor(const ChunkID, const WorldSeed) = 0;
         virtual void DestroyFor(const ChunkID) = 0;
         virtual float GetWorkRadius(void) const = 0;
 };
@@ -64,7 +65,6 @@ struct ChunkRecord
 {
     bool updating,
          inRange;
-    std::recursive_mutex mtxChunk;
 
     ChunkRecord(const ChunkRecord &);
     ChunkRecord(void);
@@ -82,12 +82,18 @@ struct ChunkWorkRecord
 class ChunkManager: public Initializable
 {
     private:
+        WorldSeed mSeed;
+
+        std::thread mGarbageCollectThread;
         ConcurrentManager mChunkWorkManager;
         std::atomic<bool> working;
+
+        static void ChunkGarbageCollectThreadFunc(ChunkManager *);
         static void ChunkWorkerThreadFunc(ChunkManager *);
-        void FindOneJob(ChunkID &, ChunkWorkRecord *&);
-        bool Updating(const ChunkID, const ChunkWorkRecord *);
+
         void GarbageCollect(void);
+        bool FindOneJob(ChunkID &, ChunkWorkRecord *&);
+        bool Updating(const ChunkID, const ChunkWorkRecord *);
 
         std::list<std::exception_ptr> mErrors;
         std::recursive_mutex mtxError;
@@ -97,6 +103,9 @@ class ChunkManager: public Initializable
         std::list<ChunkWorkRecord> mWorkRecords;
         std::list<const ChunkObserver *> observerPs;
     public:
+        ChunkManager(const WorldSeed);
+        ~ChunkManager(void);
+
         void Add(const ChunkObserver *);
         void Add(ChunkWorker *);
 

@@ -14,7 +14,7 @@ App &App::Instance(void)
 }
 App::App(void)
 : mMainGLContext(NULL), mMainWindow(NULL), running(false),
-  pCurrentScene(NULL), lockLevelGL(0)
+  pCurrentScene(NULL)
 {
 }
 App::~App(void)
@@ -135,49 +135,6 @@ void App::SystemInit(void)
     {
         throw InitError("OpenGL version 3.2 is not enabled.");
     }
-
-    // Keep the context free until locked.
-    SDL_GL_MakeCurrent(NULL, NULL);
-}
-void App::LockGL(void)
-{
-    if (mMainGLContext == NULL)
-        throw GLError("LockGL: There's no GL context!");
-
-    mtxGL.lock();
-
-    if (lockLevelGL <= 0 && SDL_GL_MakeCurrent(mMainWindow, mMainGLContext) != 0)
-    {
-        mtxGL.unlock();
-        throw GLError("LockGL: SDL_GL_MakeCurrent: %s", SDL_GetError());
-    }
-
-    lockLevelGL++;
-}
-void App::UnlockGL(void)
-{
-    if (mMainGLContext == NULL)
-        throw GLError("UnlockGL: There's no GL context!");
-
-    lockLevelGL--;
-
-    if (lockLevelGL <= 0 && SDL_GL_MakeCurrent(NULL, NULL) != 0)
-    {
-        throw GLError("UnlockGL: SDL_GL_MakeCurrent: %s", SDL_GetError());
-    }
-    mtxGL.unlock();
-}
-GLLock::GLLock()
-{
-    App::Instance().LockGL();
-}
-GLLock::~GLLock(void)
-{
-    App::Instance().UnlockGL();
-}
-GLLock App::GetGLLock(void)
-{
-    return GLLock();
 }
 void App::SwitchScene(Scene *p)
 {
@@ -190,6 +147,10 @@ void App::SwitchScene(Scene *p)
     if (pCurrentScene != NULL)
         pCurrentScene->Start();
 }
+void App::PushGL(LoadJob *p)
+{
+    mGLQueue.Add(p);
+}
 void App::Run(void)
 {
     SDL_Event event;
@@ -200,36 +161,31 @@ void App::Run(void)
     mFontManager.InitAll(GetResourcePath("tiki.svg"));
 
     // Scene scope.
+    InGameScene gameScene;
+    LoadScene loadScene(&gameScene);
+    SwitchScene(&loadScene);
+
+    running = true;
+    while (running)
     {
-        InGameScene gameScene;
-        LoadScene loadScene(&gameScene);
+        while (SDL_PollEvent(&event))
+            OnEvent(event);
 
-        SwitchScene(&loadScene);
+        mGLQueue.ConsumeAll();
 
-        running = true;
-        while (running)
+        // In this scope, we lock the current scene.
         {
-            while (SDL_PollEvent(&event))
-                OnEvent(event);
+            std::scoped_lock lock(mtxCurrentScene);
+            pCurrentScene->Update();
 
-            // In this scope, we lock the current scene.
-            {
-                std::scoped_lock lock(mtxCurrentScene);
-                pCurrentScene->Update();
-
-                // In this scope, we lock the GL context for rendering.
-                {
-                    GLLock lockGL = GetGLLock();
-
-                    pCurrentScene->Render();
-                    SDL_GL_SwapWindow(mMainWindow);
-                }
-            }
+            // In this scope, we lock the GL context for rendering.
+            pCurrentScene->Render();
+            SDL_GL_SwapWindow(mMainWindow);
         }
-
-        // Let the current scene Know that it's ending.
-        SwitchScene(NULL);
     }
+
+    // Let the current scene Know that it's ending.
+    SwitchScene(NULL);
 }
 void App::OnEvent(const SDL_Event &event)
 {

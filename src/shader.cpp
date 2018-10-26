@@ -153,8 +153,6 @@ void DeleteShader(GLuint shader)
 }
 void ShaderLoadJob::Run(void)
 {
-    GLLock scopedLock = App::Instance().GetGLLock();
-
     if (geometrySrc.length() > 0)
     {
         GLScoped scopedVertexShader(MakeShader(vertexSrc, GL_VERTEX_SHADER), DeleteShader),
