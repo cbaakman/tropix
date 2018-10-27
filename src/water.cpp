@@ -38,7 +38,7 @@ vec3 GetPosition(float x, float z)
 
     p.x = floor(center.x) + x;
     p.z = floor(center.z) + z;
-    p.y = 0.3 * sin((time / 10) * p.x * p.z);
+    p.y = 2.5 + 2.5 * sin(time + p.x / 25 + p.z / 25 + 1.0);
 
     return p;
 }
