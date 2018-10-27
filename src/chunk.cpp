@@ -100,14 +100,8 @@ void ChunkManager::ChunkWorkerThreadFunc(ChunkManager *p)
 
     while (p->working)
     {
-        {
-            std::scoped_lock lock(p->mtxLists);
-
-            if (!(p->FindOneJob(id, pRecord)))
-                continue;
-
-            pRecord->mChunks[id].updating = true;
-        }
+        if (!(p->FindOneJob(id, pRecord)))
+            continue;
 
         try
         {
@@ -273,6 +267,8 @@ bool ChunkManager::FindOneJob(ChunkID &id, ChunkWorkRecord *&pRecord)
 
     ChunkID centerID;
 
+    std::scoped_lock lock(mtxLists);
+
     for (ChunkWorkRecord &record : mWorkRecords)
     {
         radius = record.pWorker->GetWorkRadius();
@@ -297,12 +293,14 @@ bool ChunkManager::FindOneJob(ChunkID &id, ChunkWorkRecord *&pRecord)
                     if (!Updating(id, &record))
                     {
                         pRecord = &record;
+                        pRecord->mChunks[id].updating = true;
                         return true;
                     }
                     id.z = centerID.z - r;
                     if (!Updating(id, &record))
                     {
                         pRecord = &record;
+                        pRecord->mChunks[id].updating = true;
                         return true;
                     }
                 }
@@ -314,12 +312,14 @@ bool ChunkManager::FindOneJob(ChunkID &id, ChunkWorkRecord *&pRecord)
                     if (!Updating(id, &record))
                     {
                         pRecord = &record;
+                        pRecord->mChunks[id].updating = true;
                         return true;
                     }
                     id.x = centerID.x - r;
                     if (!Updating(id, &record))
                     {
                         pRecord = &record;
+                        pRecord->mChunks[id].updating = true;
                         return true;
                     }
                 }
