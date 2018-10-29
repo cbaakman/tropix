@@ -93,6 +93,17 @@ GLRef GLManager::AllocBuffer(void)
 
     return GLRef(pObj);
 }
+GLRef GLManager::AllocFrameBuffer(void)
+{
+    GLObj *pObj = AddObj([](GLuint buffer) { glDeleteFramebuffers(1, &buffer); CHECK_GL(); });
+    glGenFramebuffers(1, &(pObj->handle));
+    CHECK_GL();
+
+    if (pObj->handle == 0)
+        throw GLError("No framebuffer was allocated.");
+
+    return GLRef(pObj);
+}
 void GLManager::GarbageCollect(void)
 {
     auto it = mObjs.begin();

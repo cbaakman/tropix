@@ -64,6 +64,7 @@ class GLManager
         GLRef AllocTexture(void);
         GLRef AllocShaderProgram(void);
         GLRef AllocBuffer(void);
+        GLRef AllocFrameBuffer(void);
 
         void GarbageCollect(void);
         void DestroyAll(void);
