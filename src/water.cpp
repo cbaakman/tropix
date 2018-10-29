@@ -169,6 +169,12 @@ void WaterRenderer::TellInit(Queue &)
 }
 void WaterRenderer::Render(const mat4 &projection, const mat4 &view, const vec3 &center, const vec3 &lightDirection, const float time)
 {
+    glEnable(GL_DEPTH_TEST);
+    CHECK_GL();
+
+    glDisable(GL_CULL_FACE);
+    CHECK_GL();
+
     glUseProgram(*pProgram);
     CHECK_GL();
 
