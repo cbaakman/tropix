@@ -36,7 +36,7 @@ class App: public EventListener
         Scene *pCurrentScene;
 
         GLManager mGLManager;
-        BottleNeckQueue mGLQueue;
+        Queue mGLQueue;
         FontManager mFontManager;
 
         bool HasSystem(void);
@@ -62,7 +62,7 @@ class App: public EventListener
 
         boost::filesystem::path GetResourcePath(const std::string &location) const;
 
-        void PushGL(LoadJob *);
+        void PushGL(Job *);
 
         void SwitchScene(Scene *);
 

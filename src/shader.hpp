@@ -29,7 +29,7 @@ class ShaderError: public Error
 };
 
 
-class ShaderLoadJob: public LoadJob
+class ShaderLoadJob: public Job
 {
     private:
         std::string vertexSrc, geometrySrc, fragmentSrc;

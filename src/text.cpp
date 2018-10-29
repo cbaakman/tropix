@@ -48,7 +48,7 @@ void main()
 }
 )shader";
 
-void TextRenderer::TellInit(Loader &loader)
+void TextRenderer::TellInit(Queue &queue)
 {
     pBuffer = App::Instance().GetGLManager()->AllocBuffer();
     pProgram = App::Instance().GetGLManager()->AllocShaderProgram();

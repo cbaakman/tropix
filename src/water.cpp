@@ -153,7 +153,7 @@ void WaterRenderer::FillBuffers(const size_t distanceSquares)
 
     countIndices = grid.countIndices;
 }
-void WaterRenderer::TellInit(Loader &loader)
+void WaterRenderer::TellInit(Queue &)
 {
     pProgram = App::Instance().GetGLManager()->AllocShaderProgram();
     VertexAttributeMap attributes;

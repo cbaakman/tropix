@@ -59,7 +59,7 @@ class PNGReader
 void FillGLTexture(const PNGImage *, GLuint texture);
 
 
-class PNGTextureLoadJob: public LoadJob
+class PNGTextureLoadJob: public Job
 {
     private:
         std::string location;

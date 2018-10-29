@@ -134,7 +134,7 @@ TextureError::TextureError(const char *format, ...)
     vsnprintf(buffer, ERRORBUFFER_SIZE, format, pArgs);
     va_end(pArgs);
 }
-class FillGLTextureJob: public LoadJob
+class FillGLTextureJob: public Job
 {
     private:
         std::shared_ptr<const PNGImage> pImage;

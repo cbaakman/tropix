@@ -147,7 +147,7 @@ void App::SwitchScene(Scene *p)
     if (pCurrentScene != NULL)
         pCurrentScene->Start();
 }
-void App::PushGL(LoadJob *p)
+void App::PushGL(Job *p)
 {
     mGLQueue.Add(p);
 }
@@ -171,7 +171,7 @@ void App::Run(void)
         while (SDL_PollEvent(&event))
             OnEvent(event);
 
-        mGLQueue.ConsumeAll();
+        WorkAllFrom(mGLQueue);
 
         // In this scope, we lock the current scene.
         {

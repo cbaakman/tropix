@@ -89,7 +89,7 @@ size_t GetOnChunkIndexFor(const size_t ix, const size_t iz)
 }
 #define GROUND_VERTEXBUFFER_SIZE (COUNT_GROUND_CHUNKRENDER_VERTICES * sizeof(GroundRenderVertex))
 #define GROUND_INDEXBUFFER_SIZE (COUNT_GROUND_CHUNKRENDER_INDICES * sizeof(GroundRenderIndex))
-class GroundChunkBufferFillJob: public LoadJob
+class GroundChunkBufferFillJob: public Job
 {
     private:
         ChunkID id;
@@ -122,7 +122,7 @@ class GroundChunkBufferFillJob: public LoadJob
             pRenderer->Set(id, pObj);
         }
 };
-class GroundChunkBufferDeleteJob: public LoadJob
+class GroundChunkBufferDeleteJob: public Job
 {
     private:
         GroundChunkRenderObj *pObj;
@@ -238,10 +238,10 @@ GLfloat GroundRenderer::GetWorkRadius(void) const
 
     return config.render.distance;
 }
-void GroundRenderer::TellInit(Loader &loader)
+void GroundRenderer::TellInit(Queue &queue)
 {
     pTexture = App::Instance().GetGLManager()->AllocTexture();
-    loader.Add(new PNGTextureLoadJob("sand", *pTexture));
+    queue.Add(new PNGTextureLoadJob("sand", *pTexture));
 
     VertexAttributeMap attributes;
     attributes["position"] = GROUND_POSITION_INDEX;

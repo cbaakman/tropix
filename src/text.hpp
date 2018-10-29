@@ -24,7 +24,7 @@ class TextRenderer: public TextGL::GLTextLeftToRightIterator, Initializable
     public:
         void SetProjection(const mat4 &);
 
-        void TellInit(Loader &);
+        void TellInit(Queue &);
 };
 
 enum FontStyleChoice

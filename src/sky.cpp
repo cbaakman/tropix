@@ -156,7 +156,7 @@ SkyRenderer::SkyRenderer(const size_t subdiv)
 {
 }
 
-void SkyRenderer::TellInit(Loader &loader)
+void SkyRenderer::TellInit(Queue &)
 {
     pSkyVertexBuffer = App::Instance().GetGLManager()->AllocBuffer();
     pSkyIndexBuffer = App::Instance().GetGLManager()->AllocBuffer();

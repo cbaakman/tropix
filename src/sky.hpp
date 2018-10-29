@@ -18,7 +18,7 @@ class SkyRenderer: Initializable
     public:
         SkyRenderer(const size_t subdiv);
 
-        void TellInit(Loader &);
+        void TellInit(Queue &);
 
         void SetHeight(const float y);
         void Render(const mat4 &projection, const mat4 &view, const float heightAboveHorizon,

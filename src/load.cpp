@@ -11,19 +11,10 @@ using namespace glm;
 #include "shader.hpp"
 
 
-Loader::Loader(void)
+void WorkThreadFunc(Queue &queue, ErrorManager &errorManager)
 {
-}
-Loader::~Loader(void)
-{
-    Clear();
-
-    mConcurrentManager.JoinAll();
-}
-void Loader::Work(Loader *pLoader)
-{
-    LoadJob *pJob;
-    while ((pJob = pLoader->Take()) != NULL)
+    std::shared_ptr<Job> pJob;
+    while ((pJob = queue.Take()) != NULL)
     {
         try
         {
@@ -31,108 +22,57 @@ void Loader::Work(Loader *pLoader)
         }
         catch (...)
         {
-            pLoader->PushError(std::current_exception());
+            errorManager.PushError(std::current_exception());
         }
-
-        delete pJob;
     }
 }
-void Loader::Clear(void)
+void WorkAllFrom(Queue &queue)
 {
-    // Delete the remaining jobs.
-    std::scoped_lock(mtxQueue);
-    for (LoadJob *pJob : mQueue)
+    std::shared_ptr<Job> pJob;
+    while ((pJob = queue.Take()) != NULL)
+        pJob->Run();
+}
+void ClearAllFrom(Queue &queue)
+{
+    while (queue.Take() != NULL);
+}
+size_t Queue::Size(void)
+{
+    std::scoped_lock lock(mtxJobs);
+    return mJobs.size();
+}
+void Queue::Add(Job *pJob)
+{
+    Add(std::shared_ptr<Job>(pJob));
+}
+void Queue::Add(std::shared_ptr<Job> pJob)
+{
+    std::scoped_lock lock(mtxJobs);
+    mJobs.push_back(pJob);
+}
+std::shared_ptr<Job> Queue::Take(void)
+{
+    std::shared_ptr<Job> pJob;
+    std::scoped_lock lock(mtxJobs);
+    if (mJobs.size() > 0)
     {
-        delete pJob;
-    }
-
-    // Clear the queue, so that workers don't pick up any deleted pointers.
-    mQueue.clear();
-}
-void Loader::GetStats(LoadStats &stats)
-{
-    std::scoped_lock(mtxStats, mtxQueue);
-
-    stats.countJobsAtStart = countJobsAtStart;
-    stats.countJobsRemain = mQueue.size();
-}
-void Loader::Run(void)
-{
-    {
-        std::scoped_lock(mtxStats, mtxQueue);
-        countJobsAtStart = mQueue.size();
-    }
-
-    Config config;
-    App::Instance().GetConfig(config);
-
-    mConcurrentManager.Start(config.loadConcurrency, Work, this);
-
-    mConcurrentManager.JoinAll();
-    ThrowAnyError();
-}
-void Loader::Add(LoadJob *pJob)
-{
-    std::scoped_lock(mtxQueue);
-    mQueue.push_back(pJob);
-}
-LoadJob *Loader::Take(void)
-{
-    std::scoped_lock(mtxQueue);
-    if (mQueue.size() > 0)
-    {
-        LoadJob *pJob = mQueue.front();
-        mQueue.pop_front();
+        pJob = mJobs.front();
+        mJobs.pop_front();
         return pJob;
     }
     else
         return NULL;
 }
-void Loader::PushError(const std::exception_ptr &e)
+void ErrorManager::PushError(const std::exception_ptr &e)
 {
-    std::scoped_lock(mtxQueue);
+    std::scoped_lock lock(mtxErrors);
     mErrors.push_back(e);
 }
-void Loader::ThrowAnyError(void)
+void ErrorManager::ThrowAnyError(void)
 {
-    std::scoped_lock(mtxQueue);
+    std::scoped_lock lock(mtxErrors);
     if (mErrors.size() > 0)
         std::rethrow_exception(mErrors.front());
-}
-void BottleNeckQueue::Add(LoadJob *pJob)
-{
-    std::scoped_lock lock(mtxQueue);
-
-    mQueue.push_back(pJob);
-}
-void BottleNeckQueue::ConsumeAll(void)
-{
-    std::scoped_lock lock(mtxQueue);
-
-    while (mQueue.size() > 0)
-    {
-        LoadJob *pJob = mQueue.front();
-        mQueue.pop_front();
-
-        try
-        {
-            pJob->Run();
-        }
-        catch (...)
-        {
-            delete pJob;
-
-            std::rethrow_exception(std::current_exception());
-        }
-        delete pJob;
-    }
-}
-BottleNeckQueue::~BottleNeckQueue(void)
-{
-    for (LoadJob *pJob : mQueue)
-    {
-        delete pJob;
-    }
 }
 
 struct LoadVertex
@@ -228,7 +168,7 @@ void main()
 LoadScene::LoadScene(InitializableScene *p)
 : pLoaded(p)
 {
-    pLoaded->TellInit(mLoader);
+    pLoaded->TellInit(mQueue);
 
     pProgram = App::Instance().GetGLManager()->AllocShaderProgram();
     VertexAttributeMap attributes;
@@ -254,15 +194,17 @@ LoadScene::~LoadScene(void)
     // When this scene ceases to exist, the loading thread must also stop.
     InterruptLoading();
 }
-void LoadScene::LoadThreadFunc(LoadScene *p)
-{
-    App::Instance().GetGLManager()->GarbageCollect();
-
-    p->mLoader.Run();
-}
 void LoadScene::Start(void)
 {
-    mLoadThread = std::thread(LoadThreadFunc, this);
+    // Try to free some GL memory before loading.
+    App::Instance().GetGLManager()->GarbageCollect();
+
+    Config config;
+    App::Instance().GetConfig(config);
+
+    countStartJobs = mQueue.Size();
+
+    mConcurrentManager.Start(config.loadConcurrency, WorkThreadFunc, std::ref(mQueue), std::ref(mErrorManager));
 }
 void LoadScene::Stop(void)
 {
@@ -270,10 +212,9 @@ void LoadScene::Stop(void)
 }
 void LoadScene::InterruptLoading(void)
 {
-    mLoader.Clear();
-
-    if (mLoadThread.joinable())
-        mLoadThread.join();
+    ClearAllFrom(mQueue);
+    mConcurrentManager.JoinAll();
+    mErrorManager.ThrowAnyError();
 }
 void LoadScene::Render(void)
 {
@@ -293,9 +234,8 @@ void LoadScene::Render(void)
     CHECK_GL();
     CHECK_UNIFORM_LOCATION(fracDoneLocation);
 
-    LoadStats stats;
-    mLoader.GetStats(stats);
-    glUniform1f(fracDoneLocation, float(stats.countJobsAtStart - stats.countJobsRemain) / stats.countJobsAtStart);
+    size_t countRemainingJobs = mQueue.Size();
+    glUniform1f(fracDoneLocation, float(countStartJobs - countRemainingJobs) / countStartJobs);
     CHECK_GL();
 
     glBindBuffer(GL_ARRAY_BUFFER, *pBuffer);
@@ -311,12 +251,11 @@ void LoadScene::Render(void)
 }
 void LoadScene::Update(void)
 {
-    LoadStats stats;
-    mLoader.GetStats(stats);
-
-    if (stats.countJobsRemain <= 0)
+    if (mQueue.Size() <= 0)
     {
-        mLoadThread.join();
+        mConcurrentManager.JoinAll();
+        mErrorManager.ThrowAnyError();
+
         App::Instance().SwitchScene(pLoaded);
     }
 }

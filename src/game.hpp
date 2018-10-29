@@ -71,7 +71,7 @@ class InGameScene: public InitializableScene
         void Render(void);
         void Stop(void);
 
-        void TellInit(Loader &);
+        void TellInit(Queue &);
 
         void OnEvent(const SDL_Event &);
 };

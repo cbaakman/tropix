@@ -18,7 +18,7 @@ class WaterRenderer: public Initializable
 
         void FillBuffers(const size_t distanceSquares);
     public:
-        void TellInit(Loader &);
+        void TellInit(Queue &);
 
         void Render(const mat4 &projection, const mat4 &view, const vec3 &center, const vec3 &lightDirection, const float time);
 };

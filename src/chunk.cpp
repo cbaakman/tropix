@@ -129,7 +129,7 @@ void ChunkManager::ChunkGarbageCollectThreadFunc(ChunkManager *p)
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 }
-void ChunkManager::Add(ChunkWorker *p)
+void ChunkManager::Connect(ChunkWorker *p)
 {
     std::scoped_lock(mtxLists);
 
@@ -138,7 +138,7 @@ void ChunkManager::Add(ChunkWorker *p)
 
     mWorkRecords.push_back(record);
 }
-void ChunkManager::Add(const ChunkObserver *p)
+void ChunkManager::Connect(const ChunkObserver *p)
 {
     std::scoped_lock(mtxLists);
 
@@ -216,7 +216,7 @@ void ChunkManager::GarbageCollect(void)
         }
     }
 }
-class ChunkPrepareJob: public LoadJob
+class ChunkPrepareJob: public Job
 {
     private:
         ChunkID id;
@@ -234,7 +234,7 @@ class ChunkPrepareJob: public LoadJob
             pRecord->mChunks[id].updating = true;
         }
 };
-void ChunkManager::TellInit(Loader &loader)
+void ChunkManager::TellInit(Queue &queue)
 {
     float radius, x, z;
     vec3 pos;
@@ -251,7 +251,7 @@ void ChunkManager::TellInit(Loader &loader)
             {
                 for (z = pos.z - radius; z < (pos.z + radius); z += CHUNK_SIZE)
                 {
-                    loader.Add(new ChunkPrepareJob(&record, GetChunkID(x, z), mSeed));
+                    queue.Add(new ChunkPrepareJob(&record, GetChunkID(x, z), mSeed));
                 }
             }
         }

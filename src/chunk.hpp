@@ -106,15 +106,16 @@ class ChunkManager: public Initializable
         ChunkManager(const WorldSeed);
         ~ChunkManager(void);
 
-        void Add(const ChunkObserver *);
-        void Add(ChunkWorker *);
+        // The inserted pointers will NOT get deleted automatically.
+        void Connect(const ChunkObserver *);
+        void Connect(ChunkWorker *);
 
         void Start(void);
         void Stop(void);
 
         void ThrowAnyError(void);
 
-        void TellInit(Loader &loader);  // Basically preloads some chunks.
+        void TellInit(Queue &);  // Basically preloads some chunks.
         void DestroyAll(void);
 };
 

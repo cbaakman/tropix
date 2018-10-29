@@ -48,6 +48,8 @@ class GroundRenderer: public Initializable, public ChunkWorker
 {
     private:
         std::recursive_mutex mtxChunkRenderObjs;
+
+        // Not using unique_ptr here, because a render object can only be deleted in the GL thread.
         std::unordered_map<ChunkID, GroundChunkRenderObj *> mChunkRenderObjs;
 
         GLRef pProgram,
@@ -57,7 +59,7 @@ class GroundRenderer: public Initializable, public ChunkWorker
     public:
         ~GroundRenderer(void);
 
-        void TellInit(Loader &loader);
+        void TellInit(Queue &);
 
         void Render(const mat4 &projection, const mat4 &view, const vec3 &center,
                     const vec4 &horizonColor, const vec3 &lightDirection);

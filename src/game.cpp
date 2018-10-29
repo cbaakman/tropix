@@ -16,8 +16,8 @@ InGameScene::InGameScene(void)
   mSkyRenderer(20),
   prevTime(std::chrono::system_clock::now()), t(0.0f)
 {
-    mChunkManager.Add(&mGroundRenderer);
-    mChunkManager.Add(&mPlayer);
+    mChunkManager.Connect(&mGroundRenderer);
+    mChunkManager.Connect(&mPlayer);
 
     Config config;
     App::Instance().GetConfig(config);
@@ -39,13 +39,13 @@ Player::Player(void)
  :yaw(0.0f), pitch(0.0f), position(0.0f, 2.0f, 0.0f)
 {
 }
-void InGameScene::TellInit(Loader &loader)
+void InGameScene::TellInit(Queue &queue)
 {
-    mTextRenderer.TellInit(loader);
-    mChunkManager.TellInit(loader);
-    mSkyRenderer.TellInit(loader);
-    mGroundRenderer.TellInit(loader);
-    mWaterRenderer.TellInit(loader);
+    mTextRenderer.TellInit(queue);
+    mChunkManager.TellInit(queue);
+    mSkyRenderer.TellInit(queue);
+    mGroundRenderer.TellInit(queue);
+    mWaterRenderer.TellInit(queue);
 }
 SDL_Keycode KeyInterpreter::GetConfigKeyCode(const KeyBinding binding) const
 {
