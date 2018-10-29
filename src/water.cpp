@@ -1,9 +1,18 @@
+#include <boost/format.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 #include "water.hpp"
 #include "error.hpp"
 #include "shader.hpp"
 #include "app.hpp"
+
+
+const std::string srcWaveFunc = (boost::format(R"shader(
+float WaterWaveFunc(float time, float x, float z)
+{
+    return %1% * sin(time / %2% + x / %3% + z / %3% + 1.0);
+}
+)shader") % WATER_WAVE_AMPLITUDE % WATER_WAVE_PERIOD % WATER_WAVE_LENGTH).str();
 
 
 struct WaterVertex
@@ -16,9 +25,9 @@ typedef unsigned int WaterIndex;
 #define WATERVERTEX_POSITION_INDEX 0
 
 
-const char waterVertexShaderSrc[] = R"shader(
-#version 150
-
+const std::string waterVertexShaderSrc = "#version 150" +
+srcWaveFunc +
+R"shader(
 uniform float time;
 uniform mat4 viewMatrix;
 uniform mat4 projectionMatrix;
@@ -38,7 +47,7 @@ vec3 GetPosition(float x, float z)
 
     p.x = floor(center.x) + x;
     p.z = floor(center.z) + z;
-    p.y = 2.5 + 2.5 * sin(time + p.x / 25 + p.z / 25 + 1.0);
+    p.y = WaterWaveFunc(time, p.x, p.z);
 
     return p;
 }
@@ -61,7 +70,7 @@ void main()
 }
 )shader",
 
-waterFragmentShaderSrc[] = R"shader(
+waterFragmentShaderSrc = R"shader(
 #version 150
 
 uniform vec3 lightDirection;

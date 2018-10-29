@@ -9,6 +9,13 @@ using namespace glm;
 #include "load.hpp"
 
 
+#define WATER_WAVE_LENGTH 25.0f
+#define WATER_WAVE_PERIOD 1.0f
+#define WATER_WAVE_AMPLITUDE 2.5f
+
+extern const std::string srcWaveFunc;
+
+
 class WaterRenderer: public Initializable
 {
     private:
